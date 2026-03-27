@@ -12,15 +12,15 @@ FitScan is a mobile application built with React Native and Expo. Point your cam
  
 ## Features
  
-- **📷 Equipment Scanner** — Take photos of your equipment and let AI identify everything automatically, including multiple items per photo
-- **⚡ Workout Generator** — Get a full session with exercises, sets, reps, rest times and YouTube execution videos
-- **🏃 Bodyweight Mode** — No equipment? Train anywhere with a bodyweight-only session
-- **🎯 Quick Scan** — Instantly get exercise suggestions for any single piece of equipment
-- **⚖️ Weight Tracking** — Log the weight used for each exercise and get progressive overload suggestions (+2.5kg)
-- **📊 Progress Screen** — Track sessions, total training time, and most-worked muscle groups
-- **⏱️ Rest Timer** — Automatic countdown between sets with vibration alert
-- **🏆 Celebration** — Confetti animation when you complete a session
-- **📖 Onboarding** — Instagram-style story slides for first-time users
+- ** Equipment Scanner** — Take photos of your equipment and let AI identify everything automatically, including multiple items per photo
+- ** Workout Generator** — Get a full session with exercises, sets, reps, rest times and YouTube execution videos
+- ** Bodyweight Mode** — No equipment? Train anywhere with a bodyweight-only session
+- ** Quick Scan** — Instantly get exercise suggestions for any single piece of equipment
+- ** Weight Tracking** — Log the weight used for each exercise and get progressive overload suggestions (+2.5kg)
+- ** Progress Screen** — Track sessions, total training time, and most-worked muscle groups
+- ** Rest Timer** — Automatic countdown between sets with vibration alert
+- ** Celebration** — Confetti animation when you complete a session
+- ** Onboarding** — Instagram-style story slides for first-time users
  
 ---
  
