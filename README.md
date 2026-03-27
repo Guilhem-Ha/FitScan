@@ -18,8 +18,6 @@ FitScan is a mobile application built with React Native and Expo. Point your cam
 - ** Quick Scan** — Instantly get exercise suggestions for any single piece of equipment
 - ** Weight Tracking** — Log the weight used for each exercise and get progressive overload suggestions (+2.5kg)
 - ** Progress Screen** — Track sessions, total training time, and most-worked muscle groups
-- ** Rest Timer** — Automatic countdown between sets with vibration alert
-- ** Celebration** — Confetti animation when you complete a session
 - ** Onboarding** — Instagram-style story slides for first-time users
  
 ---
