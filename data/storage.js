@@ -21,6 +21,12 @@ export async function saveSession(session) {
   } catch (e) { throw new Error("Impossible de sauvegarder la séance"); }
 }
 
+/* Durée d'une séance : le temps réellement passé si on l'a mesuré, sinon la
+   durée prévue par Gemini — les séances d'avant la mesure n'ont que celle-ci. */
+export function sessionMinutes(session) {
+  return session?.elapsedMin ?? session?.workout?.totalDuration ?? 0;
+}
+
 export async function deleteSession(id) {
   try {
     const sessions = await getSessions();

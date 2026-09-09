@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, StatusBar, Animated, TouchableOpacity
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { getSessions, deleteSession } from "../data/storage";
+import { getSessions, deleteSession, sessionMinutes } from "../data/storage";
 import { C, T, R, E } from "../theme";
 import { Press, PrimaryButton, SectionLabel, IconBadge } from "../ui/kit";
 
@@ -46,7 +46,7 @@ function SessionCard({ item, onPress, onDelete }) {
 
           <View style={styles.cardMeta}>
             <Feather name="clock" size={12} color={C.textMuted} />
-            <Text style={styles.cardMetaText}>{item.workout?.totalDuration} MIN</Text>
+            <Text style={styles.cardMetaText}>{sessionMinutes(item)} MIN</Text>
             <View style={styles.metaDot} />
             <Feather name="list" size={12} color={C.textMuted} />
             <Text style={styles.cardMetaText}>{item.workout?.exercises?.length} EX.</Text>

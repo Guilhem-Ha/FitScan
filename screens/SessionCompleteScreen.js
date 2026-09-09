@@ -64,9 +64,9 @@ function Stat({ icon, value, label }) {
 }
 
 /* Écran de fin de séance. Props :
-   workout, setsDone, totalSets, elapsedMin, onGoHome, onReview */
+   workout, setsDone, totalSets, elapsedMin, saveFailed, onGoHome, onReview */
 export default function SessionCompleteScreen({
-  workout = {}, setsDone = 0, totalSets = 0, elapsedMin, onGoHome, onReview,
+  workout = {}, setsDone = 0, totalSets = 0, elapsedMin, saveFailed, onGoHome, onReview,
 }) {
   const scale = useRef(new Animated.Value(0.85)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -95,7 +95,11 @@ export default function SessionCompleteScreen({
 
         <Text style={styles.eyebrow}>{workout.title?.toUpperCase() || "TA SÉANCE"}</Text>
         <Text style={styles.title}>SÉANCE{"\n"}TERMINÉE</Text>
-        <Text style={styles.sub}>Ta séance a été sauvegardée dans ton historique.</Text>
+        <Text style={[styles.sub, saveFailed && { color: C.amber }]}>
+          {saveFailed
+            ? "Impossible d'enregistrer la séance dans ton historique."
+            : "Ta séance a été sauvegardée dans ton historique."}
+        </Text>
 
         <View style={styles.statsRow}>
           <Stat icon="clock" value={minutes} label="MINUTES" />

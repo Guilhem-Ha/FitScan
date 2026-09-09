@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { getSessions } from "../data/storage";
+import { getSessions, sessionMinutes } from "../data/storage";
 import { C, T, R, E } from "../theme";
 import { Card, SectionLabel, ProgressBar, IconBadge } from "../ui/kit";
 
@@ -41,7 +41,7 @@ export default function ProgressScreen() {
   }, []);
 
   const totalSessions = sessions.length;
-  const totalMinutes = sessions.reduce((a, s) => a + (s.workout?.totalDuration || 0), 0);
+  const totalMinutes = sessions.reduce((a, s) => a + sessionMinutes(s), 0);
   const totalExercices = sessions.reduce((a, s) => a + (s.workout?.exercises?.length || 0), 0);
 
   const now = new Date();
@@ -134,7 +134,7 @@ export default function ProgressScreen() {
                     <Text style={styles.historyTitle} numberOfLines={1}>{s.workout?.title?.toUpperCase()}</Text>
                     <Text style={styles.historyMeta}>
                       {new Date(s.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).toUpperCase()}
-                      {" · "}{s.workout?.totalDuration} MIN{" · "}{s.workout?.exercises?.length} EX.
+                      {" · "}{sessionMinutes(s)} MIN{" · "}{s.workout?.exercises?.length} EX.
                     </Text>
                   </View>
                   <View style={styles.historyTag}>

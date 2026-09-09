@@ -182,20 +182,40 @@ function ExerciseCard({ ex, index, onSetsChange }) {
 export default function WorkoutScreen({ navigation, route }) {
   const { workout, sessionName, level, goal, split, duration, equipments, readOnly } = route?.params || {};
   const [showComplete, setShowComplete] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [elapsedMin, setElapsedMin] = useState(0);
   const [progress, setProgress] = useState({});
   const startedAt = useRef(Date.now());
-
-  useEffect(() => {
-    if (!readOnly && workout) {
-      saveSession({ workout, sessionName, level, goal, split, duration, equipments }).catch(() => {});
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const alreadySaved = useRef(false);
 
   if (!workout) return null;
 
   const totalSets = (workout.exercises || []).reduce((a, ex) => a + (ex.sets || 3), 0);
   const setsDone = Object.values(progress).reduce((a, n) => a + n, 0);
   const ratio = totalSets > 0 ? setsDone / totalSets : 0;
+
+  /* La séance n'est enregistrée qu'ici : la sauver à l'ouverture comptait une
+     séance pour un simple aller-retour sur l'écran. */
+  const finishSession = async () => {
+    // Déjà enregistrée : « revoir la séance » puis re-terminer réaffiche le même bilan.
+    if (alreadySaved.current) { setShowComplete(true); return; }
+
+    const minutes = Math.max(1, Math.round((Date.now() - startedAt.current) / 60000));
+    setElapsedMin(minutes);
+    setShowComplete(true);
+
+    if (readOnly) return;
+    alreadySaved.current = true;
+    try {
+      await saveSession({
+        workout, sessionName, level, goal, split, duration, equipments,
+        elapsedMin: minutes, setsDone, totalSets,
+      });
+    } catch {
+      alreadySaved.current = false;
+      setSaveFailed(true);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -206,7 +226,8 @@ export default function WorkoutScreen({ navigation, route }) {
           workout={workout}
           setsDone={setsDone}
           totalSets={totalSets}
-          elapsedMin={Math.max(1, Math.round((Date.now() - startedAt.current) / 60000))}
+          elapsedMin={elapsedMin}
+          saveFailed={saveFailed}
           onGoHome={() => {
             setShowComplete(false);
             navigation.reset({ index: 0, routes: [{ name: "Main" }] });
@@ -307,7 +328,7 @@ export default function WorkoutScreen({ navigation, route }) {
               label="TERMINER LA SÉANCE"
               icon="flag"
               style={{ marginTop: 28 }}
-              onPress={() => setShowComplete(true)}
+              onPress={finishSession}
             />
           )}
         </View>
