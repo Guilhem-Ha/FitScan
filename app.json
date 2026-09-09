@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "fitscan",
-    "slug": "snack-01f4690b-ff6b-4e9a-83b7-07c80fef49aa",
+    "name": "FitScan",
+    "slug": "fitscan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0A0A0A"
     },
     "ios": {
       "supportsTablet": true,
@@ -28,10 +28,10 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0A0A0A"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.guiha.snack01f4690bff6b4e9a83b707c80fef49aa"
+      "package": "com.guiha.fitscan"
     },
     "web": {
       "favicon": "./assets/favicon.png"
