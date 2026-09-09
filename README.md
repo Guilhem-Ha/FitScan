@@ -93,6 +93,20 @@ fitscan/
 ---
  
  
+## Expo project slug
+
+The `slug` in `app.json` still reads `snack-01f4690b-…`, inherited from the
+original Expo Snack. It cannot be changed: a `projectId` is bound to a single
+slug for good ([expo.fyi/eas-project-id](https://expo.fyi/eas-project-id)), and
+EAS rejects any build whose `app.json` disagrees. Renaming the project on the
+dashboard only changes its display name, which is now **FitScan**.
+
+Nothing user-facing depends on it — the app is named FitScan, the Android
+package is `com.guiha.fitscan`, and update URLs key off the `projectId`. The
+slug only appears in `expo.dev` URLs.
+
+---
+
 ## API Keys
  
 This app uses the **Google Gemini API** (free tier available).  
