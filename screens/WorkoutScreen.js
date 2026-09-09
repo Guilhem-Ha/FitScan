@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, Modal,
+  View, Text, StyleSheet, Modal,
   SafeAreaView, StatusBar, Linking, Vibration,
-  Animated, Dimensions, TextInput, Platform,
+  Animated, Dimensions, TextInput,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { saveSession, saveWeight, getLastWeight } from "../data/storage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { C, T } from "../theme";
+import { C, T, R, E } from "../theme";
+import { Press, PrimaryButton, SectionLabel, IconBadge, Ring } from "../ui/kit";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const CONFETTI_COLORS = ["#C8FF00", "#FFFFFF", "#FF0000", "#3B82F6", "#F59E0B", "#10B981"];
@@ -40,7 +42,7 @@ function Confetti() {
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {particles.map((p, i) => (
         <Animated.View key={i} style={{
-          position: "absolute", width: p.size, height: p.size * 0.5,
+          position: "absolute", width: p.size, height: p.size * 0.5, borderRadius: 2,
           backgroundColor: p.color, left: p.x,
           transform: [{ translateY: p.y }, { rotate: p.rot.interpolate({ inputRange: [-720, 720], outputRange: ["-720deg", "720deg"] }) }],
         }} />
@@ -72,12 +74,10 @@ function CelebrationModal({ visible, onGoHome }) {
       <View style={cel.overlay}>
         {visible && <Confetti />}
         <Animated.View style={[cel.card, { transform: [{ scale }], opacity }]}>
-          <Text style={cel.emoji}>🏆</Text>
+          <IconBadge name="award" size={72} />
           <Text style={cel.title}>SÉANCE{"\n"}TERMINÉE !</Text>
-          <Text style={cel.sub}>Bravo, tu l'as fait 💪{"\n"}Ta séance a été sauvegardée.</Text>
-          <TouchableOpacity style={cel.btn} onPress={onGoHome} activeOpacity={0.85}>
-            <Text style={cel.btnText}>RETOUR À L'ACCUEIL →</Text>
-          </TouchableOpacity>
+          <Text style={cel.sub}>Bravo, tu l'as fait.{"\n"}Ta séance a été sauvegardée.</Text>
+          <PrimaryButton label="RETOUR À L'ACCUEIL" icon="home" onPress={onGoHome} style={cel.btn} />
         </Animated.View>
       </View>
     </Modal>
@@ -99,22 +99,25 @@ function RestTimer({ seconds, onClose }) {
     return () => clearInterval(intervalRef.current);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const done = remaining === 0;
   const color = remaining > seconds * 0.5 ? C.accent : remaining > seconds * 0.2 ? C.amber : C.red;
 
   return (
     <View style={timer.overlay}>
       <View style={timer.card}>
-        <Text style={timer.label}>TEMPS DE REPOS</Text>
-        <Text style={[timer.count, { color }]}>{remaining}</Text>
-        <Text style={timer.unit}>secondes</Text>
-        <View style={timer.barBg}>
-          <View style={[timer.barFill, { width: `${(remaining / seconds) * 100}%`, backgroundColor: color }]} />
-        </View>
-        <TouchableOpacity style={[timer.btn, remaining === 0 && { backgroundColor: C.accent }]} onPress={onClose}>
-          <Text style={[timer.btnText, remaining === 0 && { color: C.bg }]}>
-            {remaining === 0 ? "C'EST PARTI 💪" : "PASSER"}
+        <SectionLabel accent>TEMPS DE REPOS</SectionLabel>
+
+        <Ring size={190} stroke={9} value={remaining / seconds} color={color}>
+          <Text style={[timer.count, { color }]}>{remaining}</Text>
+          <Text style={timer.unit}>secondes</Text>
+        </Ring>
+
+        <Press style={[timer.btn, done && timer.btnDone]} onPress={onClose}>
+          <Feather name={done ? "play" : "skip-forward"} size={15} color={done ? C.bg : C.textPrimary} />
+          <Text style={[timer.btnText, done && { color: C.bg }]}>
+            {done ? "C'EST PARTI" : "PASSER"}
           </Text>
-        </TouchableOpacity>
+        </Press>
       </View>
     </View>
   );
@@ -135,14 +138,27 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
 
   return (
     <View style={ws.wrap}>
-    <View style={ws.row}>
+      <View style={ws.head}>
+        <Feather name="anchor" size={12} color={C.textMuted} />
         <Text style={ws.label}>POIDS UTILISÉ</Text>
-        {lastWeight && (
-          <Text style={ws.hint}>
-            Dernière fois : {lastWeight.weight}{lastWeight.unit}{suggestedWeight ? `  →  Suggéré : ${suggestedWeight}${lastWeight.unit}` : ""}
-          </Text>
-        )}
       </View>
+
+      {lastWeight && (
+        <View style={ws.hintRow}>
+          <Text style={ws.hintText}>
+            Dernière fois {lastWeight.weight}{lastWeight.unit}
+          </Text>
+          {suggestedWeight && (
+            <>
+              <Feather name="arrow-right" size={11} color={C.accent} />
+              <Text style={[ws.hintText, { color: C.accent }]}>
+                Suggéré {suggestedWeight}{lastWeight.unit}
+              </Text>
+            </>
+          )}
+        </View>
+      )}
+
       <View style={ws.inputRow}>
         <TextInput
           style={ws.input}
@@ -153,25 +169,16 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
           onChangeText={setWeight}
           maxLength={6}
         />
-        <TouchableOpacity
-          style={[ws.unitBtn, unit === "kg" && ws.unitBtnActive]}
-          onPress={() => setUnit("kg")}
-        >
-          <Text style={[ws.unitText, unit === "kg" && ws.unitTextActive]}>kg</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[ws.unitBtn, unit === "lbs" && ws.unitBtnActive]}
-          onPress={() => setUnit("lbs")}
-        >
-          <Text style={[ws.unitText, unit === "lbs" && ws.unitTextActive]}>lbs</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[ws.saveBtn, saved && { backgroundColor: C.green }]}
-          onPress={handleSave}
-          activeOpacity={0.8}
-        >
-          <Text style={ws.saveBtnText}>{saved ? "✓" : "OK"}</Text>
-        </TouchableOpacity>
+        <View style={ws.unitGroup}>
+          {["kg", "lbs"].map((u) => (
+            <Press key={u} style={[ws.unitBtn, unit === u && ws.unitBtnActive]} onPress={() => setUnit(u)} scaleTo={0.92}>
+              <Text style={[ws.unitText, unit === u && { color: C.accent }]}>{u}</Text>
+            </Press>
+          ))}
+        </View>
+        <Press style={[ws.saveBtn, saved && { backgroundColor: C.green }]} onPress={handleSave} scaleTo={0.9}>
+          <Feather name={saved ? "check" : "save"} size={15} color={C.bg} />
+        </Press>
       </View>
     </View>
   );
@@ -186,9 +193,7 @@ function ExerciseCard({ ex, index }) {
   const allDone = done.length === totalSets;
 
   useEffect(() => {
-    if (ex.requiresWeight) {
-      getLastWeight(ex.name).then(setLastWeight);
-    }
+    if (ex.requiresWeight) getLastWeight(ex.name).then(setLastWeight);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const suggestedWeight = lastWeight ? (lastWeight.weight + 2.5).toFixed(1) : null;
@@ -203,18 +208,19 @@ function ExerciseCard({ ex, index }) {
   };
 
   return (
-    <View style={styles.exWrap}>
+    <View style={[styles.exCard, allDone && styles.exCardDone]}>
       {showTimer && <RestTimer seconds={ex.rest || 60} onClose={() => setShowTimer(false)} />}
 
       <View style={styles.exTop}>
-        <Text style={[styles.exIndex, allDone && { color: C.accent }]}>
-          {String(index + 1).padStart(2, "0")}
-        </Text>
+        <View style={[styles.exIndexBox, allDone && styles.exIndexBoxDone]}>
+          <Text style={[styles.exIndex, allDone && { color: C.bg }]}>
+            {allDone ? "✓" : String(index + 1).padStart(2, "0")}
+          </Text>
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.exName}>{ex.name.toUpperCase()}</Text>
           <Text style={styles.exEquip}>{ex.equipment}</Text>
         </View>
-        {allDone && <View style={styles.doneBadge}><Text style={styles.doneBadgeText}>✓</Text></View>}
       </View>
 
       <View style={styles.statsLine}>
@@ -222,19 +228,18 @@ function ExerciseCard({ ex, index }) {
           <Text style={styles.statNum} numberOfLines={1} adjustsFontSizeToFit>{ex.sets}</Text>
           <Text style={styles.statLbl}>séries</Text>
         </View>
-        <Text style={styles.statSep}>×</Text>
+        <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statNum} numberOfLines={1} adjustsFontSizeToFit>{ex.reps}</Text>
           <Text style={styles.statLbl}>répétitions</Text>
         </View>
-        <Text style={styles.statSep}>·</Text>
+        <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statNum} numberOfLines={1} adjustsFontSizeToFit>{ex.rest}s</Text>
           <Text style={styles.statLbl}>repos</Text>
         </View>
       </View>
 
-      {/* Saisie du poids uniquement si nécessaire */}
       {ex.requiresWeight && (
         <WeightSelector
           exerciseName={ex.name}
@@ -245,41 +250,64 @@ function ExerciseCard({ ex, index }) {
 
       <View style={styles.setsRow}>
         {Array.from({ length: totalSets }).map((_, i) => (
-          <TouchableOpacity
+          <Press
             key={i}
             style={[styles.setBtn, done.includes(i) && styles.setBtnDone]}
             onPress={() => toggleSet(i)}
-            activeOpacity={0.7}
+            scaleTo={0.9}
           >
-            <Text style={[styles.setBtnText, done.includes(i) && styles.setBtnTextDone]}>
-              {done.includes(i) ? "✓" : i + 1}
-            </Text>
-          </TouchableOpacity>
+            {done.includes(i)
+              ? <Feather name="check" size={17} color={C.bg} />
+              : <Text style={styles.setBtnText}>{i + 1}</Text>}
+          </Press>
         ))}
       </View>
 
       {ex.muscles?.length > 0 && (
         <View style={styles.musclesRow}>
-          {ex.muscles.map((m, i) => <Text key={i} style={styles.muscleChip}>{m}</Text>)}
+          {ex.muscles.map((m, i) => (
+            <View key={i} style={styles.muscleChip}>
+              <Text style={styles.muscleChipText}>{m}</Text>
+            </View>
+          ))}
         </View>
       )}
 
-      {ex.tips && <Text style={styles.tips}>💡  {ex.tips}</Text>}
-
-      {ex.youtubeQuery && (
-        <TouchableOpacity
-          style={styles.videoBtn}
-          onPress={() => Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.youtubeQuery)}`)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.videoBtnInner}>
-            <View style={styles.videoPlay}><Text style={styles.videoPlayIcon}>▶</Text></View>
-            <Text style={styles.videoBtnText}>VOIR L'EXÉCUTION</Text>
-          </View>
-        </TouchableOpacity>
+      {ex.tips && (
+        <View style={styles.tipRow}>
+          <Feather name="info" size={13} color={C.textMuted} />
+          <Text style={styles.tips}>{ex.tips}</Text>
+        </View>
       )}
 
-      <View style={styles.separator} />
+      {ex.youtubeQuery && (
+        <Press
+          style={styles.videoBtn}
+          onPress={() => Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.youtubeQuery)}`)}
+          scaleTo={0.96}
+        >
+          <View style={styles.videoPlay}><Feather name="play" size={12} color="#fff" /></View>
+          <Text style={styles.videoBtnText}>VOIR L'EXÉCUTION</Text>
+        </Press>
+      )}
+    </View>
+  );
+}
+
+// ─── Bloc échauffement / retour au calme ──────────────────────────
+function PhaseBlock({ icon, title, block }) {
+  return (
+    <View style={styles.blockSection}>
+      <View style={styles.blockHead}>
+        <Feather name={icon} size={14} color={C.accent} />
+        <Text style={styles.blockLabel}>{title} — {block.duration} MIN</Text>
+      </View>
+      {block.exercises?.map((ex, i) => (
+        <View key={i} style={styles.blockItemRow}>
+          <View style={styles.blockBullet} />
+          <Text style={styles.blockItem}>{ex}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -307,185 +335,249 @@ export default function WorkoutScreen({ navigation, route }) {
       />
 
       <KeyboardAwareScrollView
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          enableOnAndroid={true}
-          extraScrollHeight={120}
-          enableAutomaticScroll={true}
-        >
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid
+        extraScrollHeight={120}
+        enableAutomaticScroll
+      >
+        <Press style={styles.back} onPress={() => navigation.goBack()} scaleTo={0.94}>
+          <Feather name="chevron-left" size={16} color={C.textSecondary} />
+          <Text style={styles.backText}>RETOUR</Text>
+        </Press>
 
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
-            <Text style={styles.backText}>← RETOUR</Text>
-          </TouchableOpacity>
-
+        <View style={styles.header}>
           <Text style={styles.eyebrow}>TA SÉANCE</Text>
           <Text style={styles.title}>{workout.title?.toUpperCase()}</Text>
-
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{workout.totalDuration} MIN</Text>
-            <Text style={styles.metaDot}>·</Text>
-            <Text style={styles.metaText}>{workout.exercises?.length} EXERCICES</Text>
+            <View style={styles.metaPill}>
+              <Feather name="clock" size={12} color={C.accent} />
+              <Text style={styles.metaText}>{workout.totalDuration} MIN</Text>
+            </View>
+            <View style={styles.metaPill}>
+              <Feather name="list" size={12} color={C.accent} />
+              <Text style={styles.metaText}>{workout.exercises?.length} EXERCICES</Text>
+            </View>
           </View>
+        </View>
 
-          <View style={styles.divider} />
-
-          <View style={styles.timerHint}>
-            <Text style={styles.timerHintIcon}>⏱</Text>
-            <Text style={styles.timerHintText}>Coche chaque série pour déclencher le chrono de repos.</Text>
+        <View style={styles.body}>
+          <View style={styles.hintCard}>
+            <Feather name="clock" size={14} color={C.accent} />
+            <Text style={styles.hintText}>Coche chaque série pour déclencher le chrono de repos.</Text>
           </View>
-          <View style={[styles.timerHint, { borderLeftColor: C.amber, marginBottom: 28 }]}>
-            <Text style={styles.timerHintIcon}>💡</Text>
-            <Text style={styles.timerHintText}>Pour les poids, commence avec une charge avec laquelle tu peux faire toutes les séries proprement — mieux vaut trop léger que se blesser !</Text>
+          <View style={[styles.hintCard, styles.hintCardAmber]}>
+            <Feather name="alert-triangle" size={14} color={C.amber} />
+            <Text style={styles.hintText}>
+              Pour les poids, commence avec une charge que tu tiens sur toutes les séries — mieux vaut trop léger que se blesser.
+            </Text>
           </View>
 
           {workout.warmup && (
-            <View style={styles.blockSection}>
-              <Text style={styles.blockLabel}>🔥  ÉCHAUFFEMENT — {workout.warmup.duration} MIN</Text>
-              {workout.warmup.exercises?.map((ex, i) => (
-                <Text key={i} style={styles.blockItem}>· {ex}</Text>
-              ))}
-            </View>
+            <PhaseBlock icon="sunrise" title="ÉCHAUFFEMENT" block={workout.warmup} />
           )}
 
-          <Text style={styles.sectionLabel}>EXERCICES</Text>
-          {workout.exercises?.map((ex, i) => <ExerciseCard key={i} ex={ex} index={i} />)}
+          <SectionLabel accent style={styles.sectionSpaced}>EXERCICES</SectionLabel>
+          <View style={{ gap: 14 }}>
+            {workout.exercises?.map((ex, i) => <ExerciseCard key={i} ex={ex} index={i} />)}
+          </View>
 
           {workout.cooldown && (
-            <View style={styles.blockSection}>
-              <Text style={styles.blockLabel}>🧊  RETOUR AU CALME — {workout.cooldown.duration} MIN</Text>
-              {workout.cooldown.exercises?.map((ex, i) => (
-                <Text key={i} style={styles.blockItem}>· {ex}</Text>
-              ))}
-            </View>
+            <PhaseBlock icon="moon" title="RETOUR AU CALME" block={workout.cooldown} />
           )}
 
           {!readOnly && (
-            <TouchableOpacity
-              style={styles.finishBtn}
+            <PrimaryButton
+              label="TERMINER LA SÉANCE"
+              icon="check-circle"
               onPress={() => setShowCelebration(true)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.finishText}>TERMINER LA SÉANCE</Text>
-            </TouchableOpacity>
+              style={styles.finishBtn}
+            />
           )}
-
-        </KeyboardAwareScrollView>
+        </View>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
 
 // ─── Styles poids ─────────────────────────────────────────────────
 const ws = StyleSheet.create({
-  wrap: { paddingLeft: 56, marginBottom: 14 },
-  row: { marginBottom: 8 },
-  label: { ...T.label, fontSize: 10, marginBottom: 4 },
-  hint: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.accent, marginBottom: 8 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  wrap: {
+    backgroundColor: C.surface2, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border,
+    padding: 14, marginBottom: 14,
+  },
+  head: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  label: { ...T.label, fontSize: 10 },
+  hintRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap" },
+  hintText: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textSecondary },
+
+  inputRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   input: {
-    width: 70, height: 44, backgroundColor: C.surface2,
+    width: 78, height: 46, backgroundColor: C.bg,
     color: C.textPrimary, fontFamily: "DMSans_700Bold",
-    fontSize: 18, textAlign: "center", textAlignVertical: "center",
-    borderBottomWidth: 1, borderColor: C.border,
+    fontSize: 18, textAlign: "center",
+    borderRadius: R.sm, borderWidth: 1, borderColor: C.borderHi,
     paddingVertical: 0, includeFontPadding: false,
   },
+  unitGroup: { flexDirection: "row", gap: 6, flex: 1 },
   unitBtn: {
-    paddingHorizontal: 10, paddingVertical: 8,
-    borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: R.pill, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.bg,
   },
-  unitBtnActive: { borderColor: C.textPrimary, backgroundColor: C.surface2 },
+  unitBtnActive: { borderColor: C.accent, backgroundColor: C.accentSoft },
   unitText: { fontFamily: "DMSans_600SemiBold", fontSize: 12, color: C.textMuted },
-  unitTextActive: { color: C.textPrimary },
+
   saveBtn: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    backgroundColor: C.accent,
+    width: 46, height: 46, borderRadius: R.sm,
+    backgroundColor: C.accent, alignItems: "center", justifyContent: "center",
   },
-  saveBtnText: { fontFamily: "DMSans_700Bold", fontSize: 13, color: C.bg },
 });
 
 // ─── Styles célébration ───────────────────────────────────────────
 const cel = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.88)", alignItems: "center", justifyContent: "center" },
-  card: { backgroundColor: C.surface, padding: 36, alignItems: "center", width: SW * 0.85 },
-  emoji: { fontSize: 56, marginBottom: 16 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 48, color: C.textPrimary, letterSpacing: 2, lineHeight: 48, textAlign: "center", marginBottom: 12 },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", alignItems: "center", justifyContent: "center" },
+  card: {
+    backgroundColor: C.surface, borderRadius: R.lg,
+    borderWidth: 1, borderColor: C.borderHi,
+    padding: 32, alignItems: "center", width: SW * 0.85,
+    ...E.floating,
+  },
+  title: {
+    fontFamily: "BebasNeue_400Regular", fontSize: 46, color: C.textPrimary,
+    letterSpacing: 2, lineHeight: 46, textAlign: "center", marginTop: 20, marginBottom: 12,
+  },
   sub: { fontFamily: "DMSans_400Regular", fontSize: 15, color: C.textSecondary, textAlign: "center", lineHeight: 22, marginBottom: 28 },
-  btn: { backgroundColor: C.accent, width: "100%", paddingVertical: 16, alignItems: "center" },
-  btnText: { fontFamily: "DMSans_700Bold", fontSize: 14, color: C.bg, letterSpacing: 2 },
+  btn: { alignSelf: "stretch" },
 });
 
 // ─── Styles timer ─────────────────────────────────────────────────
 const timer = StyleSheet.create({
-  overlay: { position: "absolute", top: -20, left: -24, right: -24, bottom: -20, backgroundColor: "rgba(0,0,0,0.95)", zIndex: 10, alignItems: "center", justifyContent: "center" },
-  card: { backgroundColor: C.surface, padding: 36, alignItems: "center", width: 280 },
-  label: { ...T.label, marginBottom: 16 },
-  count: { fontFamily: "BebasNeue_400Regular", fontSize: 96, lineHeight: 96 },
-  unit: { ...T.small, marginTop: 4, marginBottom: 24 },
-  barBg: { width: "100%", height: 2, backgroundColor: C.border, marginBottom: 28 },
-  barFill: { height: "100%" },
-  btn: { width: "100%", paddingVertical: 16, alignItems: "center", borderWidth: 1, borderColor: C.border },
+  overlay: {
+    position: "absolute", top: -8, left: -8, right: -8, bottom: -8,
+    backgroundColor: "rgba(0,0,0,0.95)", borderRadius: R.lg,
+    zIndex: 10, alignItems: "center", justifyContent: "center",
+  },
+  card: { alignItems: "center", padding: 24, gap: 20 },
+  count: { fontFamily: "BebasNeue_400Regular", fontSize: 84, lineHeight: 86 },
+  unit: { ...T.small, color: C.textMuted, marginTop: -6 },
+  btn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingHorizontal: 28, paddingVertical: 14,
+    borderRadius: R.pill, borderWidth: 1, borderColor: C.borderHi,
+  },
+  btnDone: { backgroundColor: C.accent, borderColor: C.accent },
   btnText: { fontFamily: "DMSans_700Bold", fontSize: 14, letterSpacing: 1.5, color: C.textPrimary },
 });
 
 // ─── Styles écran ─────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  container: { paddingBottom: 60 },
+  container: { paddingBottom: 48 },
 
-  back: { paddingHorizontal: 24, paddingTop: 20, marginBottom: 20 },
-  backText: { ...T.label },
+  back: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    alignSelf: "flex-start", marginLeft: 24, marginTop: 16, marginBottom: 12,
+    paddingVertical: 8, paddingHorizontal: 12,
+    backgroundColor: C.surface, borderRadius: R.pill,
+    borderWidth: 1, borderColor: C.border,
+  },
+  backText: { ...T.label, fontSize: 10 },
 
-  eyebrow: { ...T.label, color: C.accent, paddingHorizontal: 24, marginBottom: 4 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 40, color: C.textPrimary, letterSpacing: 1, lineHeight: 42, paddingHorizontal: 24, marginBottom: 12 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, marginBottom: 4 },
-  metaText: { ...T.label, color: C.textSecondary },
-  metaDot: { color: C.textMuted },
+  header: { paddingHorizontal: 24, paddingBottom: 24 },
+  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
+  title: { fontFamily: "BebasNeue_400Regular", fontSize: 40, color: C.textPrimary, letterSpacing: 1, lineHeight: 42, marginBottom: 14 },
+  metaRow: { flexDirection: "row", gap: 8 },
+  metaPill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: C.accentSoft, borderRadius: R.pill,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  metaText: { ...T.label, fontSize: 10, color: C.accent },
 
-  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 24, marginVertical: 24 },
+  body: { paddingHorizontal: 24 },
+  sectionSpaced: { marginTop: 28 },
 
-  timerHint: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 24, marginBottom: 24, borderLeftWidth: 2, borderLeftColor: C.accent, paddingLeft: 14 },
-  timerHintIcon: { fontSize: 14 },
-  timerHintText: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, flex: 1 },
+  hintCard: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: C.accentSofter, borderRadius: R.md,
+    borderWidth: 1, borderColor: "rgba(200,255,0,0.18)",
+    padding: 14, marginBottom: 10,
+  },
+  hintCardAmber: { backgroundColor: "rgba(245,158,11,0.07)", borderColor: "rgba(245,158,11,0.2)" },
+  hintText: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, lineHeight: 19 },
 
-  blockSection: { paddingHorizontal: 24, marginBottom: 28 },
-  blockLabel: { fontFamily: "DMSans_700Bold", fontSize: 12, color: C.textSecondary, marginBottom: 10, letterSpacing: 1, textTransform: "uppercase" },
-  blockItem: { fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, marginBottom: 6, lineHeight: 20 },
+  blockSection: {
+    backgroundColor: C.surface, borderRadius: R.lg,
+    borderWidth: 1, borderColor: C.border,
+    padding: 18, marginTop: 20,
+  },
+  blockHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  blockLabel: { fontFamily: "DMSans_700Bold", fontSize: 12, color: C.textPrimary, letterSpacing: 1 },
+  blockItemRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 7 },
+  blockBullet: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.textMuted },
+  blockItem: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, lineHeight: 20 },
 
-  sectionLabel: { ...T.label, paddingHorizontal: 24, marginBottom: 20 },
+  exCard: {
+    backgroundColor: C.surface, borderRadius: R.lg,
+    borderWidth: 1, borderColor: C.border,
+    padding: 18,
+    ...E.raised,
+  },
+  exCardDone: { borderColor: "rgba(200,255,0,0.3)" },
 
-  exWrap: { paddingHorizontal: 24 },
-  exTop: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 16 },
-  exIndex: { fontFamily: "BebasNeue_400Regular", fontSize: 32, color: C.textMuted, lineHeight: 34, width: 42 },
-  exName: { fontFamily: "BebasNeue_400Regular", fontSize: 28, color: C.textPrimary, lineHeight: 30 },
-  exEquip: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textMuted, marginTop: 3 },
-  doneBadge: { width: 28, height: 28, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" },
-  doneBadgeText: { fontSize: 13, color: C.bg, fontWeight: "700" },
+  exTop: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  exIndexBox: {
+    width: 42, height: 42, borderRadius: R.md,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
+  },
+  exIndexBoxDone: { backgroundColor: C.accent, borderColor: C.accent },
+  exIndex: { fontFamily: "BebasNeue_400Regular", fontSize: 22, color: C.textSecondary, lineHeight: 24 },
+  exName: { fontFamily: "BebasNeue_400Regular", fontSize: 26, color: C.textPrimary, lineHeight: 28 },
+  exEquip: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textMuted, marginTop: 2 },
 
-  statsLine: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, paddingLeft: 56, flexWrap: "wrap" },
-  statItem: { alignItems: "center", maxWidth: 120 },
-  statNum: { fontFamily: "DMSans_700Bold", fontSize: 22, color: C.accent, lineHeight: 24 },
+  statsLine: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: C.surface2, borderRadius: R.md,
+    paddingVertical: 12, marginBottom: 14,
+  },
+  statItem: { flex: 1, alignItems: "center", paddingHorizontal: 4 },
+  statNum: { fontFamily: "DMSans_700Bold", fontSize: 20, color: C.accent, lineHeight: 24 },
   statLbl: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textMuted, marginTop: 1 },
-  statSep: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: C.textMuted },
+  statDivider: { width: 1, height: 26, backgroundColor: C.border },
 
-  setsRow: { flexDirection: "row", gap: 8, marginBottom: 14, paddingLeft: 56, flexWrap: "wrap" },
-  setBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
+  setsRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
+  setBtn: {
+    width: 46, height: 46, borderRadius: R.md,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
+  },
   setBtnDone: { backgroundColor: C.accent, borderColor: C.accent },
   setBtnText: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: C.textSecondary },
-  setBtnTextDone: { color: C.bg },
 
-  musclesRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12, paddingLeft: 56 },
-  muscleChip: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textMuted },
+  musclesRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
+  muscleChip: {
+    backgroundColor: C.surface2, borderRadius: R.pill,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: C.border,
+  },
+  muscleChipText: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textSecondary },
 
-  tips: { fontFamily: "DMSans_400Regular", fontSize: 13, fontStyle: "italic", color: C.textSecondary, lineHeight: 19, marginBottom: 14, paddingLeft: 56 },
+  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 12 },
+  tips: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 13, fontStyle: "italic", color: C.textSecondary, lineHeight: 19 },
 
-  videoBtn: { paddingLeft: 56, marginBottom: 4 },
-  videoBtnInner: { flexDirection: "row", alignItems: "center", gap: 10, alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 4 },
-  videoPlay: { width: 28, height: 28, backgroundColor: "#FF0000", alignItems: "center", justifyContent: "center" },
-  videoPlayIcon: { color: "#fff", fontSize: 11, marginLeft: 2 },
+  videoBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    alignSelf: "flex-start",
+    backgroundColor: C.surface2, borderRadius: R.pill,
+    borderWidth: 1, borderColor: C.border,
+    paddingVertical: 8, paddingHorizontal: 12,
+  },
+  videoPlay: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#FF0000", alignItems: "center", justifyContent: "center" },
   videoBtnText: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: C.textPrimary, letterSpacing: 0.5 },
 
-  separator: { height: 1, backgroundColor: C.border, marginVertical: 24 },
-
-  finishBtn: { backgroundColor: C.accent, marginHorizontal: 24, paddingVertical: 18, alignItems: "center", marginTop: 8 },
-  finishText: { fontFamily: "DMSans_700Bold", fontSize: 15, color: C.bg, letterSpacing: 2 },
+  finishBtn: { marginTop: 32 },
 });

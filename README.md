@@ -73,7 +73,9 @@ npx expo start
 ```
 fitscan/
 ├── App.js                  # Navigation + onboarding
-├── theme.js                # Design system (colors, typography)
+├── theme.js                # Design system (colors, radii, elevation, typography)
+├── ui/
+│   └── kit.js              # Shared components (Press, Card, buttons, Ring…)
 ├── screens/
 │   ├── HomeScreen.js       # Session history
 │   ├── NewSessionScreen.js # Session configuration

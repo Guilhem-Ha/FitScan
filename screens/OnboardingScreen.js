@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Dimensions, StatusBar, Image, PanResponder,
+  Animated, Dimensions, StatusBar, Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { C, T } from "../theme";
+import { C, T, R } from "../theme";
+import { PrimaryButton } from "../ui/kit";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const SLIDE_DURATION = 10000;
@@ -80,7 +81,6 @@ export default function OnboardingScreen({ onDone }) {
     if (pausedRef.current) return;
     pausedRef.current = true;
     if (animRef.current) animRef.current.stop();
-    // Calcule la progression actuelle
     const elapsed = Date.now() - (startTimeRef.current || Date.now());
     elapsedRef.current = elapsed / SLIDE_DURATION;
   };
@@ -106,16 +106,13 @@ export default function OnboardingScreen({ onDone }) {
   };
 
   const slide = SLIDES[current];
+  const isLast = current === SLIDES.length - 1;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Image de fond */}
       <Image source={{ uri: slide.image }} style={styles.bgImage} />
-
-      {/* Overlay dégradé */}
-      <View style={styles.overlay} />
 
       {/* Barres de progression */}
       <View style={styles.bars}>
@@ -132,12 +129,11 @@ export default function OnboardingScreen({ onDone }) {
         ))}
       </View>
 
-      {/* Bouton passer — plus bas */}
       <TouchableOpacity style={styles.skipBtn} onPress={handleDone} activeOpacity={0.7}>
         <Text style={styles.skipText}>PASSER</Text>
       </TouchableOpacity>
 
-      {/* Zone principale — tap + hold */}
+      {/* Zone principale — tap pour avancer, maintenir pour pauser */}
       <TouchableOpacity
         style={styles.tapZone}
         onPress={handleTap}
@@ -146,27 +142,20 @@ export default function OnboardingScreen({ onDone }) {
         delayLongPress={150}
         activeOpacity={1}
       >
-        {/* Contenu texte en bas */}
-        <View style={styles.content}>
+        <View style={styles.sheet}>
+          <View style={styles.grabber} />
+
           <Text style={styles.accentText}>{slide.accent}</Text>
-          <View style={styles.divider} />
           <Text style={styles.eyebrow}>{slide.eyebrow}</Text>
           <Text style={styles.title}>{slide.title}</Text>
           <Text style={styles.body}>{slide.body}</Text>
-        </View>
 
-        {/* Bouton commencer sur la dernière slide */}
-        {current === SLIDES.length - 1 && (
-          <TouchableOpacity style={styles.startBtn} onPress={handleDone} activeOpacity={0.85}>
-            <Text style={styles.startBtnText}>COMMENCER →</Text>
-          </TouchableOpacity>
-        )}
-
-        {current < SLIDES.length - 1 && (
-          <View style={styles.tapHint}>
+          {isLast ? (
+            <PrimaryButton label="COMMENCER" icon="arrow-right" onPress={handleDone} style={styles.startBtn} />
+          ) : (
             <Text style={styles.tapHintText}>Maintenir pour pauser · Appuyer pour avancer</Text>
-          </View>
-        )}
+          )}
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -178,18 +167,10 @@ const styles = StyleSheet.create({
   bgImage: {
     position: "absolute",
     top: 0, left: 0, right: 0,
-    height: SH * 0.55,
+    height: SH * 0.58,
     resizeMode: "cover",
   },
 
-  overlay: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "transparent",
-    // Dégradé simulé avec plusieurs vues
-  },
-
-  // Dégradé du bas vers le haut
   bars: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -198,47 +179,45 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   barBg: {
-    flex: 1, height: 2,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    flex: 1, height: 3,
+    borderRadius: R.pill,
+    backgroundColor: "rgba(255,255,255,0.25)",
     overflow: "hidden",
   },
-  barFill: { height: "100%", backgroundColor: "#fff" },
+  barFill: { height: "100%", borderRadius: R.pill, backgroundColor: "#fff" },
 
   skipBtn: {
     position: "absolute",
-    top: 100,
-    right: 24,
-    zIndex: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    top: 96, right: 20, zIndex: 20,
+    paddingVertical: 8, paddingHorizontal: 14,
+    borderRadius: R.pill,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
   },
-  skipText: {
-    fontFamily: "DMSans_600SemiBold",
-    fontSize: 12, color: "#fff", letterSpacing: 1.5,
-  },
+  skipText: { fontFamily: "DMSans_600SemiBold", fontSize: 11, color: "#fff", letterSpacing: 1.5 },
 
-  tapZone: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
+  tapZone: { flex: 1, justifyContent: "flex-end" },
 
-  content: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
+  sheet: {
     backgroundColor: C.bg,
-    paddingTop: 28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 40,
   },
-  accentText: {
-    fontFamily: "BebasNeue_400Regular",
-    fontSize: 13, color: C.accent, letterSpacing: 3, marginBottom: 16,
+  grabber: {
+    width: 40, height: 4, borderRadius: R.pill,
+    backgroundColor: C.border,
+    alignSelf: "center", marginBottom: 22,
   },
-  divider: { height: 1, backgroundColor: C.border, marginBottom: 22, width: 40 },
-  eyebrow: { ...T.label, color: C.textSecondary, marginBottom: 16 },
+
+  accentText: { fontFamily: "BebasNeue_400Regular", fontSize: 13, color: C.accent, letterSpacing: 3, marginBottom: 12 },
+  eyebrow: { ...T.label, color: C.textMuted, marginBottom: 12 },
   title: {
     fontFamily: "BebasNeue_400Regular",
-    fontSize: 52, color: C.textPrimary,
-    letterSpacing: 2, lineHeight: 52, marginBottom: 16,
+    fontSize: 50, color: C.textPrimary,
+    letterSpacing: 2, lineHeight: 50, marginBottom: 14,
   },
   body: {
     fontFamily: "DMSans_400Regular",
@@ -246,18 +225,6 @@ const styles = StyleSheet.create({
     lineHeight: 24, maxWidth: 320,
   },
 
-  startBtn: {
-    backgroundColor: C.accent,
-    marginHorizontal: 24,
-    paddingVertical: 18,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  startBtnText: {
-    fontFamily: "DMSans_700Bold",
-    fontSize: 15, color: C.bg, letterSpacing: 2,
-  },
-
-  tapHint: { alignItems: "center", paddingVertical: 14, backgroundColor: C.bg },
-  tapHintText: { ...T.small, color: C.textMuted },
+  startBtn: { marginTop: 28 },
+  tapHintText: { ...T.small, color: C.textMuted, textAlign: "center", marginTop: 24 },
 });
