@@ -1,127 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, Modal,
-  SafeAreaView, StatusBar, Linking, Vibration,
-  Animated, Dimensions, TextInput,
+  View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Feather } from "@expo/vector-icons";
 import { saveSession, saveWeight, getLastWeight } from "../data/storage";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { C, T, R, E } from "../theme";
-import { Press, PrimaryButton, SectionLabel, IconBadge, Ring } from "../ui/kit";
-
-const { width: SW, height: SH } = Dimensions.get("window");
-const CONFETTI_COLORS = ["#C8FF00", "#FFFFFF", "#FF0000", "#3B82F6", "#F59E0B", "#10B981"];
-const N = 60;
-
-// ─── Confettis ────────────────────────────────────────────────────
-function Confetti() {
-  const particles = useRef(
-    Array.from({ length: N }, () => ({
-      x: new Animated.Value(Math.random() * SW),
-      y: new Animated.Value(-20),
-      rot: new Animated.Value(0),
-      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-      size: 6 + Math.random() * 8,
-      delay: Math.random() * 500,
-      targetY: SH + 80 + Math.random() * SH * 0.3,
-    }))
-  ).current;
-
-  useEffect(() => {
-    const anims = particles.map((p) =>
-      Animated.parallel([
-        Animated.timing(p.y, { toValue: p.targetY, duration: 1800 + Math.random() * 800, delay: p.delay, useNativeDriver: true }),
-        Animated.timing(p.rot, { toValue: (Math.random() > 0.5 ? 1 : -1) * 720, duration: 2200, delay: p.delay, useNativeDriver: true }),
-      ])
-    );
-    Animated.parallel(anims).start();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {particles.map((p, i) => (
-        <Animated.View key={i} style={{
-          position: "absolute", width: p.size, height: p.size * 0.5, borderRadius: 2,
-          backgroundColor: p.color, left: p.x,
-          transform: [{ translateY: p.y }, { rotate: p.rot.interpolate({ inputRange: [-720, 720], outputRange: ["-720deg", "720deg"] }) }],
-        }} />
-      ))}
-    </View>
-  );
-}
-
-// ─── Modal célébration ────────────────────────────────────────────
-function CelebrationModal({ visible, onGoHome }) {
-  const scale = useRef(new Animated.Value(0.8)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Vibration.vibrate([0, 200, 100, 200, 100, 300]);
-      Animated.parallel([
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
-        Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-      ]).start();
-    } else {
-      scale.setValue(0.8);
-      opacity.setValue(0);
-    }
-  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <Modal visible={visible} transparent animationType="none">
-      <View style={cel.overlay}>
-        {visible && <Confetti />}
-        <Animated.View style={[cel.card, { transform: [{ scale }], opacity }]}>
-          <IconBadge name="award" size={72} />
-          <Text style={cel.title}>SÉANCE{"\n"}TERMINÉE !</Text>
-          <Text style={cel.sub}>Bravo, tu l'as fait.{"\n"}Ta séance a été sauvegardée.</Text>
-          <PrimaryButton label="RETOUR À L'ACCUEIL" icon="home" onPress={onGoHome} style={cel.btn} />
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
-// ─── Timer ────────────────────────────────────────────────────────
-function RestTimer({ seconds, onClose }) {
-  const [remaining, setRemaining] = useState(seconds);
-  const intervalRef = useRef(null);
-
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setRemaining((prev) => {
-        if (prev <= 1) { clearInterval(intervalRef.current); Vibration.vibrate([0, 300, 100, 300]); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(intervalRef.current);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const done = remaining === 0;
-  const color = remaining > seconds * 0.5 ? C.accent : remaining > seconds * 0.2 ? C.amber : C.red;
-
-  return (
-    <View style={timer.overlay}>
-      <View style={timer.card}>
-        <SectionLabel accent>TEMPS DE REPOS</SectionLabel>
-
-        <Ring size={190} stroke={9} value={remaining / seconds} color={color}>
-          <Text style={[timer.count, { color }]}>{remaining}</Text>
-          <Text style={timer.unit}>secondes</Text>
-        </Ring>
-
-        <Press style={[timer.btn, done && timer.btnDone]} onPress={onClose}>
-          <Feather name={done ? "play" : "skip-forward"} size={15} color={done ? C.bg : C.textPrimary} />
-          <Text style={[timer.btnText, done && { color: C.bg }]}>
-            {done ? "C'EST PARTI" : "PASSER"}
-          </Text>
-        </Press>
-      </View>
-    </View>
-  );
-}
+import { Press, PrimaryButton, SectionLabel, ProgressBar } from "../ui/kit";
+import RestTimerScreen from "./RestTimerScreen";
+import SessionCompleteScreen from "./SessionCompleteScreen";
 
 // ─── Sélecteur de poids ───────────────────────────────────────────
 function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
@@ -138,27 +26,16 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
 
   return (
     <View style={ws.wrap}>
-      <View style={ws.head}>
-        <Feather name="anchor" size={12} color={C.textMuted} />
-        <Text style={ws.label}>POIDS UTILISÉ</Text>
-      </View>
-
+      <Text style={ws.label}>POIDS UTILISÉ</Text>
       {lastWeight && (
         <View style={ws.hintRow}>
-          <Text style={ws.hintText}>
-            Dernière fois {lastWeight.weight}{lastWeight.unit}
+          <Feather name="trending-up" size={12} color={C.accent} />
+          <Text style={ws.hint}>
+            Dernière fois : {lastWeight.weight}{lastWeight.unit}
+            {suggestedWeight ? "   →   Suggéré : " + suggestedWeight + lastWeight.unit : ""}
           </Text>
-          {suggestedWeight && (
-            <>
-              <Feather name="arrow-right" size={11} color={C.accent} />
-              <Text style={[ws.hintText, { color: C.accent }]}>
-                Suggéré {suggestedWeight}{lastWeight.unit}
-              </Text>
-            </>
-          )}
         </View>
       )}
-
       <View style={ws.inputRow}>
         <TextInput
           style={ws.input}
@@ -169,15 +46,15 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
           onChangeText={setWeight}
           maxLength={6}
         />
-        <View style={ws.unitGroup}>
-          {["kg", "lbs"].map((u) => (
-            <Press key={u} style={[ws.unitBtn, unit === u && ws.unitBtnActive]} onPress={() => setUnit(u)} scaleTo={0.92}>
-              <Text style={[ws.unitText, unit === u && { color: C.accent }]}>{u}</Text>
-            </Press>
-          ))}
-        </View>
-        <Press style={[ws.saveBtn, saved && { backgroundColor: C.green }]} onPress={handleSave} scaleTo={0.9}>
-          <Feather name={saved ? "check" : "save"} size={15} color={C.bg} />
+        {["kg", "lbs"].map((u) => (
+          <Press key={u} style={[ws.unitBtn, unit === u && ws.unitBtnActive]} onPress={() => setUnit(u)} scaleTo={0.9}>
+            <Text style={[ws.unitText, unit === u && { color: C.textPrimary }]}>{u}</Text>
+          </Press>
+        ))}
+        <Press style={[ws.saveBtn, saved && { backgroundColor: C.green }]} onPress={handleSave} scaleTo={0.92}>
+          {saved
+            ? <Feather name="check" size={16} color={C.bg} />
+            : <Text style={ws.saveBtnText}>OK</Text>}
         </Press>
       </View>
     </View>
@@ -185,7 +62,7 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
 }
 
 // ─── Exercice ─────────────────────────────────────────────────────
-function ExerciseCard({ ex, index }) {
+function ExerciseCard({ ex, index, onSetsChange }) {
   const totalSets = ex.sets || 3;
   const [done, setDone] = useState([]);
   const [showTimer, setShowTimer] = useState(false);
@@ -198,29 +75,35 @@ function ExerciseCard({ ex, index }) {
 
   const suggestedWeight = lastWeight ? (lastWeight.weight + 2.5).toFixed(1) : null;
 
+  /* Les effets restent hors de l'updater : React peut le rejouer, et prévenir
+     le parent pendant ce calcul déclencherait un setState en plein rendu. */
   const toggleSet = (i) => {
-    setDone((prev) => {
-      if (prev.includes(i)) return prev.filter((s) => s !== i);
-      const next = [...prev, i];
-      if (next.length < totalSets) setShowTimer(true);
-      return next;
-    });
+    const wasDone = done.includes(i);
+    const next = wasDone ? done.filter((s) => s !== i) : [...done, i];
+    setDone(next);
+    if (!wasDone && next.length < totalSets) setShowTimer(true);
+    onSetsChange?.(index, next.length);
   };
 
   return (
     <View style={[styles.exCard, allDone && styles.exCardDone]}>
-      {showTimer && <RestTimer seconds={ex.rest || 60} onClose={() => setShowTimer(false)} />}
+      <Modal visible={showTimer} transparent animationType="fade" onRequestClose={() => setShowTimer(false)}>
+        <RestTimerScreen seconds={ex.rest || 60} onClose={() => setShowTimer(false)} />
+      </Modal>
 
       <View style={styles.exTop}>
-        <View style={[styles.exIndexBox, allDone && styles.exIndexBoxDone]}>
-          <Text style={[styles.exIndex, allDone && { color: C.bg }]}>
-            {allDone ? "✓" : String(index + 1).padStart(2, "0")}
-          </Text>
+        <View style={[styles.exIndexBox, allDone && { backgroundColor: C.accent, borderColor: C.accent }]}>
+          <Text style={[styles.exIndex, allDone && { color: C.bg }]}>{String(index + 1).padStart(2, "0")}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.exName}>{ex.name.toUpperCase()}</Text>
           <Text style={styles.exEquip}>{ex.equipment}</Text>
         </View>
+        {allDone && (
+          <View style={styles.doneBadge}>
+            <Feather name="check" size={14} color={C.bg} />
+          </View>
+        )}
       </View>
 
       <View style={styles.statsLine}>
@@ -241,26 +124,25 @@ function ExerciseCard({ ex, index }) {
       </View>
 
       {ex.requiresWeight && (
-        <WeightSelector
-          exerciseName={ex.name}
-          lastWeight={lastWeight}
-          suggestedWeight={suggestedWeight}
-        />
+        <WeightSelector exerciseName={ex.name} lastWeight={lastWeight} suggestedWeight={suggestedWeight} />
       )}
 
       <View style={styles.setsRow}>
-        {Array.from({ length: totalSets }).map((_, i) => (
-          <Press
-            key={i}
-            style={[styles.setBtn, done.includes(i) && styles.setBtnDone]}
-            onPress={() => toggleSet(i)}
-            scaleTo={0.9}
-          >
-            {done.includes(i)
-              ? <Feather name="check" size={17} color={C.bg} />
-              : <Text style={styles.setBtnText}>{i + 1}</Text>}
-          </Press>
-        ))}
+        {Array.from({ length: totalSets }).map((_, i) => {
+          const isDone = done.includes(i);
+          return (
+            <Press
+              key={i}
+              style={[styles.setBtn, isDone && styles.setBtnDone]}
+              onPress={() => toggleSet(i)}
+              scaleTo={0.88}
+            >
+              {isDone
+                ? <Feather name="check" size={18} color={C.bg} />
+                : <Text style={styles.setBtnText}>{i + 1}</Text>}
+            </Press>
+          );
+        })}
       </View>
 
       {ex.muscles?.length > 0 && (
@@ -274,8 +156,8 @@ function ExerciseCard({ ex, index }) {
       )}
 
       {ex.tips && (
-        <View style={styles.tipRow}>
-          <Feather name="info" size={13} color={C.textMuted} />
+        <View style={styles.tipsBox}>
+          <Feather name="info" size={13} color={C.accent} />
           <Text style={styles.tips}>{ex.tips}</Text>
         </View>
       )}
@@ -283,10 +165,12 @@ function ExerciseCard({ ex, index }) {
       {ex.youtubeQuery && (
         <Press
           style={styles.videoBtn}
-          onPress={() => Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.youtubeQuery)}`)}
+          onPress={() => Linking.openURL("https://www.youtube.com/results?search_query=" + encodeURIComponent(ex.youtubeQuery))}
           scaleTo={0.96}
         >
-          <View style={styles.videoPlay}><Feather name="play" size={12} color="#fff" /></View>
+          <View style={styles.videoPlay}>
+            <Feather name="play" size={11} color="#fff" />
+          </View>
           <Text style={styles.videoBtnText}>VOIR L'EXÉCUTION</Text>
         </Press>
       )}
@@ -294,28 +178,12 @@ function ExerciseCard({ ex, index }) {
   );
 }
 
-// ─── Bloc échauffement / retour au calme ──────────────────────────
-function PhaseBlock({ icon, title, block }) {
-  return (
-    <View style={styles.blockSection}>
-      <View style={styles.blockHead}>
-        <Feather name={icon} size={14} color={C.accent} />
-        <Text style={styles.blockLabel}>{title} — {block.duration} MIN</Text>
-      </View>
-      {block.exercises?.map((ex, i) => (
-        <View key={i} style={styles.blockItemRow}>
-          <View style={styles.blockBullet} />
-          <Text style={styles.blockItem}>{ex}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 // ─── Écran ────────────────────────────────────────────────────────
 export default function WorkoutScreen({ navigation, route }) {
   const { workout, sessionName, level, goal, split, duration, equipments, readOnly } = route?.params || {};
-  const [showCelebration, setShowCelebration] = useState(false);
+  const [showComplete, setShowComplete] = useState(false);
+  const [progress, setProgress] = useState({});
+  const startedAt = useRef(Date.now());
 
   useEffect(() => {
     if (!readOnly && workout) {
@@ -325,14 +193,33 @@ export default function WorkoutScreen({ navigation, route }) {
 
   if (!workout) return null;
 
+  const totalSets = (workout.exercises || []).reduce((a, ex) => a + (ex.sets || 3), 0);
+  const setsDone = Object.values(progress).reduce((a, n) => a + n, 0);
+  const ratio = totalSets > 0 ? setsDone / totalSets : 0;
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      <CelebrationModal
-        visible={showCelebration}
-        onGoHome={() => { setShowCelebration(false); navigation.reset({ index: 0, routes: [{ name: "Main" }] }); }}
-      />
+      <Modal visible={showComplete} animationType="fade" transparent={false}>
+        <SessionCompleteScreen
+          workout={workout}
+          setsDone={setsDone}
+          totalSets={totalSets}
+          elapsedMin={Math.max(1, Math.round((Date.now() - startedAt.current) / 60000))}
+          onGoHome={() => {
+            setShowComplete(false);
+            navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+          }}
+          onReview={() => setShowComplete(false)}
+        />
+      </Modal>
+
+      {!readOnly && (
+        <View style={styles.progressBar}>
+          <ProgressBar value={ratio} height={4} />
+        </View>
+      )}
 
       <KeyboardAwareScrollView
         contentContainerStyle={styles.container}
@@ -342,57 +229,85 @@ export default function WorkoutScreen({ navigation, route }) {
         extraScrollHeight={120}
         enableAutomaticScroll
       >
-        <Press style={styles.back} onPress={() => navigation.goBack()} scaleTo={0.94}>
-          <Feather name="chevron-left" size={16} color={C.textSecondary} />
+        <Press style={styles.back} onPress={() => navigation.goBack()} scaleTo={0.92}>
+          <Feather name="arrow-left" size={16} color={C.textPrimary} />
           <Text style={styles.backText}>RETOUR</Text>
         </Press>
 
-        <View style={styles.header}>
+        <View style={styles.head}>
           <Text style={styles.eyebrow}>TA SÉANCE</Text>
           <Text style={styles.title}>{workout.title?.toUpperCase()}</Text>
           <View style={styles.metaRow}>
-            <View style={styles.metaPill}>
-              <Feather name="clock" size={12} color={C.accent} />
+            <View style={styles.metaChip}>
+              <Feather name="clock" size={12} color={C.textSecondary} />
               <Text style={styles.metaText}>{workout.totalDuration} MIN</Text>
             </View>
-            <View style={styles.metaPill}>
-              <Feather name="list" size={12} color={C.accent} />
+            <View style={styles.metaChip}>
+              <Feather name="list" size={12} color={C.textSecondary} />
               <Text style={styles.metaText}>{workout.exercises?.length} EXERCICES</Text>
             </View>
+            {!readOnly && (
+              <View style={[styles.metaChip, { backgroundColor: C.accentSoft, borderColor: "rgba(200,255,0,0.25)" }]}>
+                <Text style={[styles.metaText, { color: C.accent }]}>{setsDone}/{totalSets} SÉRIES</Text>
+              </View>
+            )}
           </View>
         </View>
 
         <View style={styles.body}>
-          <View style={styles.hintCard}>
-            <Feather name="clock" size={14} color={C.accent} />
+          <View style={styles.hint}>
+            <Feather name="watch" size={14} color={C.accent} />
             <Text style={styles.hintText}>Coche chaque série pour déclencher le chrono de repos.</Text>
           </View>
-          <View style={[styles.hintCard, styles.hintCardAmber]}>
-            <Feather name="alert-triangle" size={14} color={C.amber} />
+          <View style={[styles.hint, { borderColor: "rgba(245,158,11,0.25)", backgroundColor: "rgba(245,158,11,0.06)" }]}>
+            <Feather name="alert-circle" size={14} color={C.amber} />
             <Text style={styles.hintText}>
-              Pour les poids, commence avec une charge que tu tiens sur toutes les séries — mieux vaut trop léger que se blesser.
+              Commence avec une charge que tu tiens sur toutes les séries — mieux vaut trop léger que se blesser.
             </Text>
           </View>
 
           {workout.warmup && (
-            <PhaseBlock icon="sunrise" title="ÉCHAUFFEMENT" block={workout.warmup} />
+            <View style={styles.block}>
+              <View style={styles.blockHead}>
+                <Feather name="sunrise" size={14} color={C.accent} />
+                <Text style={styles.blockLabel}>ÉCHAUFFEMENT — {workout.warmup.duration} MIN</Text>
+              </View>
+              {workout.warmup.exercises?.map((ex, i) => (
+                <Text key={i} style={styles.blockItem}>· {ex}</Text>
+              ))}
+            </View>
           )}
 
-          <SectionLabel accent style={styles.sectionSpaced}>EXERCICES</SectionLabel>
+          <SectionLabel style={{ marginTop: 4 }} accent>EXERCICES</SectionLabel>
           <View style={{ gap: 14 }}>
-            {workout.exercises?.map((ex, i) => <ExerciseCard key={i} ex={ex} index={i} />)}
+            {workout.exercises?.map((ex, i) => (
+              <ExerciseCard
+                key={i}
+                ex={ex}
+                index={i}
+                onSetsChange={(idx, n) => setProgress((p) => ({ ...p, [idx]: n }))}
+              />
+            ))}
           </View>
 
           {workout.cooldown && (
-            <PhaseBlock icon="moon" title="RETOUR AU CALME" block={workout.cooldown} />
+            <View style={[styles.block, { marginTop: 24 }]}>
+              <View style={styles.blockHead}>
+                <Feather name="wind" size={14} color={C.blue} />
+                <Text style={styles.blockLabel}>RETOUR AU CALME — {workout.cooldown.duration} MIN</Text>
+              </View>
+              {workout.cooldown.exercises?.map((ex, i) => (
+                <Text key={i} style={styles.blockItem}>· {ex}</Text>
+              ))}
+            </View>
           )}
 
           {!readOnly && (
             <PrimaryButton
               label="TERMINER LA SÉANCE"
-              icon="check-circle"
-              onPress={() => setShowCelebration(true)}
-              style={styles.finishBtn}
+              icon="flag"
+              style={{ marginTop: 28 }}
+              onPress={() => setShowComplete(true)}
             />
           )}
         </View>
@@ -404,129 +319,84 @@ export default function WorkoutScreen({ navigation, route }) {
 // ─── Styles poids ─────────────────────────────────────────────────
 const ws = StyleSheet.create({
   wrap: {
+    marginBottom: 14, padding: 14,
     backgroundColor: C.surface2, borderRadius: R.md,
     borderWidth: 1, borderColor: C.border,
-    padding: 14, marginBottom: 14,
   },
-  head: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
-  label: { ...T.label, fontSize: 10 },
-  hintRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap" },
-  hintText: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textSecondary },
-
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  label: { ...T.label, fontSize: 10, marginBottom: 6 },
+  hintRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  hint: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.accent, flex: 1 },
+  inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   input: {
-    width: 78, height: 46, backgroundColor: C.bg,
-    color: C.textPrimary, fontFamily: "DMSans_700Bold",
-    fontSize: 18, textAlign: "center",
-    borderRadius: R.sm, borderWidth: 1, borderColor: C.borderHi,
-    paddingVertical: 0, includeFontPadding: false,
+    width: 74, height: 44, borderRadius: R.sm,
+    backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
+    color: C.textPrimary, fontFamily: "DMSans_700Bold", fontSize: 18,
+    textAlign: "center", paddingVertical: 0, includeFontPadding: false,
   },
-  unitGroup: { flexDirection: "row", gap: 6, flex: 1 },
   unitBtn: {
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderRadius: R.pill, borderWidth: 1, borderColor: C.border,
-    backgroundColor: C.bg,
+    paddingHorizontal: 12, paddingVertical: 11, borderRadius: R.sm,
+    borderWidth: 1, borderColor: C.border,
   },
-  unitBtnActive: { borderColor: C.accent, backgroundColor: C.accentSoft },
+  unitBtnActive: { borderColor: C.textPrimary, backgroundColor: C.surfaceHi },
   unitText: { fontFamily: "DMSans_600SemiBold", fontSize: 12, color: C.textMuted },
-
   saveBtn: {
-    width: 46, height: 46, borderRadius: R.sm,
-    backgroundColor: C.accent, alignItems: "center", justifyContent: "center",
+    marginLeft: "auto", minWidth: 52, alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 11,
+    borderRadius: R.sm, backgroundColor: C.accent,
   },
-});
-
-// ─── Styles célébration ───────────────────────────────────────────
-const cel = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", alignItems: "center", justifyContent: "center" },
-  card: {
-    backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.borderHi,
-    padding: 32, alignItems: "center", width: SW * 0.85,
-    ...E.floating,
-  },
-  title: {
-    fontFamily: "BebasNeue_400Regular", fontSize: 46, color: C.textPrimary,
-    letterSpacing: 2, lineHeight: 46, textAlign: "center", marginTop: 20, marginBottom: 12,
-  },
-  sub: { fontFamily: "DMSans_400Regular", fontSize: 15, color: C.textSecondary, textAlign: "center", lineHeight: 22, marginBottom: 28 },
-  btn: { alignSelf: "stretch" },
-});
-
-// ─── Styles timer ─────────────────────────────────────────────────
-const timer = StyleSheet.create({
-  overlay: {
-    position: "absolute", top: -8, left: -8, right: -8, bottom: -8,
-    backgroundColor: "rgba(0,0,0,0.95)", borderRadius: R.lg,
-    zIndex: 10, alignItems: "center", justifyContent: "center",
-  },
-  card: { alignItems: "center", padding: 24, gap: 20 },
-  count: { fontFamily: "BebasNeue_400Regular", fontSize: 84, lineHeight: 86 },
-  unit: { ...T.small, color: C.textMuted, marginTop: -6 },
-  btn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    paddingHorizontal: 28, paddingVertical: 14,
-    borderRadius: R.pill, borderWidth: 1, borderColor: C.borderHi,
-  },
-  btnDone: { backgroundColor: C.accent, borderColor: C.accent },
-  btnText: { fontFamily: "DMSans_700Bold", fontSize: 14, letterSpacing: 1.5, color: C.textPrimary },
+  saveBtnText: { fontFamily: "DMSans_700Bold", fontSize: 13, color: C.bg },
 });
 
 // ─── Styles écran ─────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  container: { paddingBottom: 48 },
+  container: { paddingBottom: 56 },
+
+  progressBar: { paddingHorizontal: 24, paddingTop: 6 },
 
   back: {
+    flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start",
+    marginLeft: 24, marginTop: 16, marginBottom: 24,
+    backgroundColor: C.surface, borderRadius: R.pill,
+    borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 9,
+  },
+  backText: { ...T.label, color: C.textPrimary, fontSize: 10 },
+
+  head: { paddingHorizontal: 24, marginBottom: 24 },
+  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
+  title: { fontFamily: "BebasNeue_400Regular", fontSize: 42, color: C.textPrimary, letterSpacing: 1, lineHeight: 44, marginBottom: 14 },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  metaChip: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    alignSelf: "flex-start", marginLeft: 24, marginTop: 16, marginBottom: 12,
-    paddingVertical: 8, paddingHorizontal: 12,
     backgroundColor: C.surface, borderRadius: R.pill,
     borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 11, paddingVertical: 6,
   },
-  backText: { ...T.label, fontSize: 10 },
-
-  header: { paddingHorizontal: 24, paddingBottom: 24 },
-  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 40, color: C.textPrimary, letterSpacing: 1, lineHeight: 42, marginBottom: 14 },
-  metaRow: { flexDirection: "row", gap: 8 },
-  metaPill: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: C.accentSoft, borderRadius: R.pill,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
-  metaText: { ...T.label, fontSize: 10, color: C.accent },
+  metaText: { ...T.label, fontSize: 9, color: C.textSecondary },
 
   body: { paddingHorizontal: 24 },
-  sectionSpaced: { marginTop: 28 },
 
-  hintCard: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10,
+  hint: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12,
     backgroundColor: C.accentSofter, borderRadius: R.md,
-    borderWidth: 1, borderColor: "rgba(200,255,0,0.18)",
-    padding: 14, marginBottom: 10,
+    borderWidth: 1, borderColor: "rgba(200,255,0,0.18)", padding: 14,
   },
-  hintCardAmber: { backgroundColor: "rgba(245,158,11,0.07)", borderColor: "rgba(245,158,11,0.2)" },
-  hintText: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, lineHeight: 19 },
+  hintText: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, flex: 1, lineHeight: 19 },
 
-  blockSection: {
+  block: {
+    marginTop: 16, marginBottom: 20, padding: 16,
     backgroundColor: C.surface, borderRadius: R.lg,
     borderWidth: 1, borderColor: C.border,
-    padding: 18, marginTop: 20,
   },
-  blockHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  blockLabel: { fontFamily: "DMSans_700Bold", fontSize: 12, color: C.textPrimary, letterSpacing: 1 },
-  blockItemRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 7 },
-  blockBullet: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.textMuted },
-  blockItem: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, lineHeight: 20 },
+  blockHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  blockLabel: { ...T.label, fontSize: 10, color: C.textPrimary },
+  blockItem: { fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, marginBottom: 6, lineHeight: 20 },
 
   exCard: {
     backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border,
-    padding: 18,
-    ...E.raised,
+    borderWidth: 1, borderColor: C.border, padding: 18, ...E.raised,
   },
-  exCardDone: { borderColor: "rgba(200,255,0,0.3)" },
+  exCardDone: { borderColor: "rgba(200,255,0,0.3)", backgroundColor: C.accentSofter },
 
   exTop: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
   exIndexBox: {
@@ -534,20 +404,22 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
   },
-  exIndexBoxDone: { backgroundColor: C.accent, borderColor: C.accent },
-  exIndex: { fontFamily: "BebasNeue_400Regular", fontSize: 22, color: C.textSecondary, lineHeight: 24 },
+  exIndex: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: C.textSecondary, lineHeight: 22 },
   exName: { fontFamily: "BebasNeue_400Regular", fontSize: 26, color: C.textPrimary, lineHeight: 28 },
   exEquip: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textMuted, marginTop: 2 },
+  doneBadge: {
+    width: 28, height: 28, borderRadius: R.pill,
+    backgroundColor: C.accent, alignItems: "center", justifyContent: "center",
+  },
 
   statsLine: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: C.surface2, borderRadius: R.md,
-    paddingVertical: 12, marginBottom: 14,
+    flexDirection: "row", alignItems: "center", marginBottom: 14,
+    backgroundColor: C.surface2, borderRadius: R.md, paddingVertical: 12,
   },
-  statItem: { flex: 1, alignItems: "center", paddingHorizontal: 4 },
-  statNum: { fontFamily: "DMSans_700Bold", fontSize: 20, color: C.accent, lineHeight: 24 },
-  statLbl: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textMuted, marginTop: 1 },
+  statItem: { flex: 1, alignItems: "center" },
   statDivider: { width: 1, height: 26, backgroundColor: C.border },
+  statNum: { fontFamily: "DMSans_700Bold", fontSize: 20, color: C.accent, lineHeight: 22 },
+  statLbl: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textMuted, marginTop: 1 },
 
   setsRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
   setBtn: {
@@ -555,29 +427,32 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
   },
-  setBtnDone: { backgroundColor: C.accent, borderColor: C.accent },
+  setBtnDone: { backgroundColor: C.accent, borderColor: C.accent, ...E.accentGlow },
   setBtnText: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: C.textSecondary },
 
   musclesRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
   muscleChip: {
     backgroundColor: C.surface2, borderRadius: R.pill,
-    paddingHorizontal: 10, paddingVertical: 4,
     borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 10, paddingVertical: 4,
   },
   muscleChipText: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textSecondary },
 
-  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 12 },
-  tips: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 13, fontStyle: "italic", color: C.textSecondary, lineHeight: 19 },
+  tipsBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 12,
+    backgroundColor: C.accentSofter, borderRadius: R.md, padding: 12,
+  },
+  tips: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, lineHeight: 19, flex: 1 },
 
   videoBtn: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    alignSelf: "flex-start",
+    flexDirection: "row", alignItems: "center", gap: 10, alignSelf: "flex-start",
     backgroundColor: C.surface2, borderRadius: R.pill,
     borderWidth: 1, borderColor: C.border,
     paddingVertical: 8, paddingHorizontal: 12,
   },
-  videoPlay: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#FF0000", alignItems: "center", justifyContent: "center" },
-  videoBtnText: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: C.textPrimary, letterSpacing: 0.5 },
-
-  finishBtn: { marginTop: 32 },
+  videoPlay: {
+    width: 24, height: 24, borderRadius: R.pill, backgroundColor: "#FF0000",
+    alignItems: "center", justifyContent: "center",
+  },
+  videoBtnText: { fontFamily: "DMSans_600SemiBold", fontSize: 12, color: C.textPrimary, letterSpacing: 0.5 },
 });

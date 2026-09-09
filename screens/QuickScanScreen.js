@@ -11,6 +11,7 @@ import { C, T, R, E } from "../theme";
 import { Press, GhostButton, IconBadge } from "../ui/kit";
 
 const CAT_COLORS = { cardio: C.blue, force: C.red, poids_libre: C.amber, accessoire: C.green };
+const CAT_ICONS = { cardio: "heart", force: "activity", poids_libre: "disc", accessoire: "circle" };
 
 export default function QuickScanScreen() {
   const [photo, setPhoto] = useState(null);
@@ -103,8 +104,13 @@ export default function QuickScanScreen() {
         {results.map((item, idx) => (
           <View key={idx} style={styles.equipBlock}>
             <View style={styles.equipHeader}>
-              <View style={[styles.catDot, { backgroundColor: CAT_COLORS[item.category] || C.textMuted }]} />
-              <Text style={styles.equipEmoji}>{item.emoji || "🏋️"}</Text>
+              <View style={[styles.equipIconBox, { borderColor: CAT_COLORS[item.category] || C.border }]}>
+                <Feather
+                  name={CAT_ICONS[item.category] || "box"}
+                  size={17}
+                  color={CAT_COLORS[item.category] || C.textSecondary}
+                />
+              </View>
               <Text style={styles.equipName} numberOfLines={1}>{item.name.toUpperCase()}</Text>
             </View>
 
@@ -196,8 +202,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     backgroundColor: C.surface2,
   },
-  catDot: { width: 8, height: 8, borderRadius: 4 },
-  equipEmoji: { fontSize: 20 },
+  equipIconBox: {
+    width: 36, height: 36, borderRadius: R.sm,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, backgroundColor: C.bg,
+  },
   equipName: { flex: 1, fontFamily: "BebasNeue_400Regular", fontSize: 22, color: C.textPrimary, letterSpacing: 1 },
 
   exList: { paddingHorizontal: 16 },
