@@ -1,7 +1,8 @@
 {
+  "//": "slug : fige par EAS (un projectId est lie a un slug definitif, cf expo.fyi/eas-project-id). Le nom affiche du projet cote EAS est FitScan.",
   "expo": {
     "name": "FitScan",
-    "slug": "fitscan",
+    "slug": "snack-01f4690b-ff6b-4e9a-83b7-07c80fef49aa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
