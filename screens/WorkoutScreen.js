@@ -270,7 +270,7 @@ export default function WorkoutScreen({ navigation, route }) {
   /* La séance n'est enregistrée qu'ici : la sauver à l'ouverture comptait une
      séance pour un simple aller-retour sur l'écran. */
   const finishSession = async () => {
-    // Déjà enregistrée : « revoir la séance » puis re-terminer réaffiche le même bilan.
+    // Déjà enregistrée : revenir à la séance puis re-terminer réaffiche le même bilan.
     if (alreadySaved.current) { setShowComplete(true); return; }
 
     const minutes = Math.max(1, Math.round((Date.now() - startedAt.current) / 60000));
@@ -294,18 +294,23 @@ export default function WorkoutScreen({ navigation, route }) {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      <Modal visible={showComplete} animationType="fade" transparent={false}>
+      {/* Plus de bouton « revoir » sur l'écran de fin : le retour Android ramène à la séance. */}
+      <Modal
+        visible={showComplete}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={() => setShowComplete(false)}
+      >
         <SessionCompleteScreen
           workout={workout}
-          setsDone={setsDone}
-          totalSets={totalSets}
+          progress={progress}
+          startedAt={startedAt.current}
           elapsedMin={elapsedMin}
           saveFailed={saveFailed}
           onGoHome={() => {
             setShowComplete(false);
             navigation.reset({ index: 0, routes: [{ name: "Main" }] });
           }}
-          onReview={() => setShowComplete(false)}
         />
       </Modal>
 
