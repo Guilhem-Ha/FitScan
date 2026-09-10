@@ -1,15 +1,38 @@
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY; // Remplace par ta clé Gemini
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
+// fetch n'a pas de délai par défaut : sur un réseau qui cale, la promesse ne se
+// résout jamais et l'écran reste sur son indicateur de chargement.
+const TIMEOUT_MS = 30000;
+
 async function callGemini(parts) {
-  const response = await fetch(`${BASE_URL}?key=${GEMINI_API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 8192,
+          // La réflexion de gemini-2.5-flash triplait le temps de réponse (~10 s
+          // contre ~3 s) sans améliorer un JSON dont le format est déjà imposé.
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("Gemini ne répond pas. Vérifie ta connexion et réessaie.");
+    }
+    throw new Error("Connexion impossible à Gemini. Vérifie ta connexion internet.");
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     const err = await response.json();
     throw new Error(`Erreur Gemini: ${err.error?.message || response.status}`);
