@@ -1,24 +1,23 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TextInput, ScrollView, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
 import { C, T, R, E } from "../theme";
-import { Press, PrimaryButton, SectionLabel } from "../ui/kit";
+import { Press, PrimaryButton, StepHeader, FooterBar } from "../ui/kit";
 
 const LEVELS = [
-  { key: "debutant", label: "DÉBUTANT", desc: "Je reprends ou je commence" },
-  { key: "intermediaire", label: "INTER", desc: "Je m'entraîne régulièrement" },
-  { key: "avance", label: "AVANCÉ", desc: "Je maîtrise les techniques" },
+  { key: "debutant", label: "DÉBUTANT", desc: "Je commence" },
+  { key: "intermediaire", label: "INTER", desc: "Régulièrement" },
+  { key: "avance", label: "AVANCÉ", desc: "Je maîtrise" },
 ];
 const GOALS = [
-  { key: "force", label: "FORCE", desc: "Puissance & masse" },
-  { key: "cardio", label: "CARDIO", desc: "Endurance & brûler" },
-  { key: "mixte", label: "MIXTE", desc: "Équilibre total" },
+  { key: "force", label: "FORCE" },
+  { key: "cardio", label: "CARDIO" },
+  { key: "mixte", label: "MIXTE" },
 ];
 const SPLITS = [
-  { key: "full_body", label: "FULL BODY", desc: "Corps entier" },
-  { key: "upper", label: "UPPER", desc: "Haut du corps" },
-  { key: "lower", label: "LOWER", desc: "Bas du corps" },
+  { key: "full_body", label: "FULL BODY" },
+  { key: "upper", label: "UPPER" },
+  { key: "lower", label: "LOWER" },
 ];
 const DURATIONS = [30, 45, 60, 90];
 
@@ -30,12 +29,14 @@ function OptionRow({ options, selected, onSelect }) {
         return (
           <Press
             key={opt.key}
-            style={[styles.optBtn, active && styles.optBtnActive]}
+            style={[styles.optBtn, !opt.desc && styles.optBtnTall, active && styles.optBtnActive]}
             onPress={() => onSelect(opt.key)}
             scaleTo={0.95}
           >
             <Text style={[styles.optLabel, active && { color: C.bg }]}>{opt.label}</Text>
-            <Text style={[styles.optDesc, active && { color: "rgba(10,10,10,0.7)" }]}>{opt.desc}</Text>
+            {opt.desc ? (
+              <Text style={[styles.optDesc, active && { color: "rgba(10,10,10,0.7)" }]}>{opt.desc}</Text>
+            ) : null}
           </Press>
         );
       })}
@@ -54,89 +55,75 @@ export default function NewSessionScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <StepHeader step={1} onBack={() => navigation.goBack()} />
+
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <Press style={styles.back} onPress={() => navigation.goBack()} scaleTo={0.92}>
-          <Feather name="arrow-left" size={16} color={C.textPrimary} />
-          <Text style={styles.backText}>RETOUR</Text>
-        </Press>
+        <Text style={styles.eyebrow}>CONFIGURE</Text>
+        <Text style={styles.title}>TON TRAINING</Text>
 
-        <View style={styles.head}>
-          <Text style={styles.eyebrow}>ÉTAPE 1 / 3 · CONFIGURE</Text>
-          <Text style={styles.title}>TON{"\n"}TRAINING</Text>
+        <Text style={styles.label}>NOM DE LA SÉANCE</Text>
+        <TextInput
+          style={[styles.input, focused && { borderColor: C.accent }]}
+          placeholder="Ex: Full body lundi..."
+          placeholderTextColor={C.textMuted}
+          value={name}
+          onChangeText={setName}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          maxLength={40}
+        />
+
+        <Text style={styles.label}>NIVEAU</Text>
+        <OptionRow options={LEVELS} selected={level} onSelect={setLevel} />
+
+        <Text style={styles.label}>OBJECTIF</Text>
+        <OptionRow options={GOALS} selected={goal} onSelect={setGoal} />
+
+        <Text style={styles.label}>MUSCLES CIBLÉS</Text>
+        <OptionRow options={SPLITS} selected={split} onSelect={setSplit} />
+
+        <View style={styles.durHead}>
+          <Text style={[styles.label, { marginTop: 0, marginBottom: 0 }]}>DURÉE</Text>
+          <Text style={styles.durValue}>{duration} MIN</Text>
         </View>
-
-        <View style={styles.body}>
-          <SectionLabel>NOM (OPTIONNEL)</SectionLabel>
-          <TextInput
-            style={[styles.input, focused && { borderColor: C.accent }]}
-            placeholder="Ex: Full body lundi..."
-            placeholderTextColor={C.textMuted}
-            value={name}
-            onChangeText={setName}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            maxLength={40}
-          />
-
-          <SectionLabel style={styles.spaced}>NIVEAU</SectionLabel>
-          <OptionRow options={LEVELS} selected={level} onSelect={setLevel} />
-
-          <SectionLabel style={styles.spaced}>OBJECTIF</SectionLabel>
-          <OptionRow options={GOALS} selected={goal} onSelect={setGoal} />
-
-          <SectionLabel style={styles.spaced}>MUSCLES CIBLÉS</SectionLabel>
-          <OptionRow options={SPLITS} selected={split} onSelect={setSplit} />
-
-          <SectionLabel style={styles.spaced}>DURÉE (MIN)</SectionLabel>
-          <View style={styles.durRow}>
-            {DURATIONS.map((d) => {
-              const active = duration === d;
-              return (
-                <Press
-                  key={d}
-                  style={[styles.durBtn, active && styles.durBtnActive]}
-                  onPress={() => setDuration(d)}
-                  scaleTo={0.93}
-                >
-                  <Text style={[styles.durLabel, active && { color: C.bg }]}>{d}</Text>
-                </Press>
-              );
-            })}
-          </View>
-
-          <PrimaryButton
-            label="SCANNER MON ÉQUIPEMENT"
-            icon="arrow-right"
-            style={styles.cta}
-            onPress={() =>
-              navigation.navigate("Scan", { sessionName: name || "Ma séance", level, goal, split, duration })
-            }
-          />
+        <View style={styles.durRow}>
+          {DURATIONS.map((d) => {
+            const active = duration === d;
+            return (
+              <Press
+                key={d}
+                style={[styles.durBtn, active && styles.optBtnActive]}
+                onPress={() => setDuration(d)}
+                scaleTo={0.93}
+              >
+                <Text style={[styles.durLabel, active && { color: C.bg }]}>{d}</Text>
+              </Press>
+            );
+          })}
         </View>
       </ScrollView>
+
+      <FooterBar>
+        <PrimaryButton
+          label="SCANNER MON ÉQUIPEMENT"
+          icon="arrow-right"
+          onPress={() =>
+            navigation.navigate("Scan", { sessionName: name || "Ma séance", level, goal, split, duration })
+          }
+        />
+      </FooterBar>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  container: { paddingBottom: 56 },
+  container: { paddingHorizontal: 24, paddingBottom: 120 },
 
-  back: {
-    flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start",
-    marginLeft: 24, marginTop: 16, marginBottom: 24,
-    backgroundColor: C.surface, borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 14, paddingVertical: 9,
-  },
-  backText: { ...T.label, color: C.textPrimary, fontSize: 10 },
+  eyebrow: { ...T.label, color: C.accent, marginBottom: 2 },
+  title: { fontFamily: "BebasNeue_400Regular", fontSize: 46, color: C.textPrimary, letterSpacing: 1.5, lineHeight: 48, marginBottom: 6 },
 
-  head: { paddingHorizontal: 24, marginBottom: 28 },
-  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 56, color: C.textPrimary, letterSpacing: 2, lineHeight: 56 },
-
-  body: { paddingHorizontal: 24 },
-  spaced: { marginTop: 28 },
+  label: { ...T.label, fontSize: 10, marginTop: 22, marginBottom: 10 },
 
   input: {
     backgroundColor: C.surface, borderRadius: R.md,
@@ -145,24 +132,24 @@ const styles = StyleSheet.create({
     color: C.textPrimary, fontFamily: "DMSans_400Regular", fontSize: 15,
   },
 
-  optRow: { flexDirection: "row", gap: 10 },
+  optRow: { flexDirection: "row", gap: 8 },
   optBtn: {
-    flex: 1, paddingVertical: 14, paddingHorizontal: 8, alignItems: "center",
+    flex: 1, paddingVertical: 12, paddingHorizontal: 6, alignItems: "center",
     backgroundColor: C.surface, borderRadius: R.md,
     borderWidth: 1, borderColor: C.border, ...E.raised,
   },
+  optBtnTall: { paddingVertical: 15 },
   optBtnActive: { backgroundColor: C.accent, borderColor: C.accent, ...E.accentGlow },
-  optLabel: { fontFamily: "BebasNeue_400Regular", fontSize: 18, color: C.textPrimary, letterSpacing: 0.5 },
-  optDesc: { ...T.small, textAlign: "center", fontSize: 10, marginTop: 3, color: C.textMuted },
+  optLabel: { fontFamily: "BebasNeue_400Regular", fontSize: 19, color: C.textSecondary, letterSpacing: 0.5 },
+  optDesc: { ...T.small, textAlign: "center", fontSize: 10, marginTop: 2, color: C.textMuted },
 
-  durRow: { flexDirection: "row", gap: 10 },
+  durHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginTop: 22, marginBottom: 10 },
+  durValue: { fontFamily: "BebasNeue_400Regular", fontSize: 22, color: C.accent, letterSpacing: 0.5 },
+  durRow: { flexDirection: "row", gap: 8 },
   durBtn: {
     flex: 1, paddingVertical: 14, alignItems: "center",
     backgroundColor: C.surface, borderRadius: R.md,
     borderWidth: 1, borderColor: C.border, ...E.raised,
   },
-  durBtnActive: { backgroundColor: C.accent, borderColor: C.accent, ...E.accentGlow },
-  durLabel: { fontFamily: "BebasNeue_400Regular", fontSize: 26, color: C.textPrimary },
-
-  cta: { marginTop: 36 },
+  durLabel: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.textSecondary },
 });

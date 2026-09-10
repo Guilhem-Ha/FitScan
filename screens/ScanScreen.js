@@ -5,10 +5,12 @@ import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { identifyEquipment, generateWorkout } from "../services/geminiService";
 import { C, T, R, E } from "../theme";
-import { Press, PrimaryButton, SectionLabel, IconBadge } from "../ui/kit";
+import { Press, PrimaryButton, GhostButton, IconBadge, StepHeader, FooterBar } from "../ui/kit";
+import { categoryOf } from "../ui/categories";
 
-const CAT_COLORS = { cardio: C.blue, force: C.red, poids_libre: C.amber, accessoire: C.green };
-const CAT_ICONS = { cardio: "heart", force: "activity", poids_libre: "disc", accessoire: "circle" };
+function Corner({ style }) {
+  return <View style={[styles.corner, style]} />;
+}
 
 export default function ScanScreen({ navigation, route }) {
   const { sessionName, level, goal, split, duration } = route.params;
@@ -17,6 +19,7 @@ export default function ScanScreen({ navigation, route }) {
   const [scanning, setScanning] = useState(false);
   const [generating, setGenerating] = useState(false);
   const busy = scanning || generating;
+  const lastPhoto = photos[photos.length - 1];
 
   const pickImage = async (useCamera) => {
     const { status } = await (useCamera
@@ -42,7 +45,6 @@ export default function ScanScreen({ navigation, route }) {
         const existing = prev.map((e) => e.name.toLowerCase());
         return [...prev, ...found.filter((e) => !existing.includes(e.name.toLowerCase()))];
       });
-      Alert.alert(found.length + " détecté(s)", found.map((e) => "• " + e.name).join("\n"));
     } catch (err) {
       Alert.alert("Erreur", err.message);
     } finally {
@@ -54,7 +56,7 @@ export default function ScanScreen({ navigation, route }) {
     setGenerating(true);
     try {
       const equipsToUse = noEquipment
-        ? [{ name: "Poids du corps", category: "accessoire", muscles: [], icon: "user" }]
+        ? [{ name: "Poids du corps", category: "accessoire", muscles: [] }]
         : equipments;
       const workout = await generateWorkout({ equipments: equipsToUse, level, goal, split, duration });
       navigation.navigate("Workout", {
@@ -70,85 +72,76 @@ export default function ScanScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <StepHeader step={2} onBack={() => navigation.goBack()} />
+
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <Press style={styles.back} onPress={() => navigation.goBack()} scaleTo={0.92}>
-          <Feather name="arrow-left" size={16} color={C.textPrimary} />
-          <Text style={styles.backText}>RETOUR</Text>
-        </Press>
+        <Text style={styles.eyebrow}>ÉTAPE 2</Text>
+        <Text style={styles.title}>SCANNE TON MATOS</Text>
+        <Text style={styles.subtitle}>Plusieurs photos OK — chaque scan ajoute à ta liste.</Text>
 
-        <View style={styles.head}>
-          <Text style={styles.eyebrow}>ÉTAPE 2 / 3</Text>
-          <Text style={styles.title}>SCANNE{"\n"}TON MATOS</Text>
-          <Text style={styles.subtitle}>Plusieurs photos OK — chaque scan ajoute à ta liste.</Text>
-        </View>
+        {/* Viseur : dernière photo analysée, ou invitation à photographier */}
+        <Press style={styles.viewfinder} onPress={() => pickImage(true)} disabled={busy} scaleTo={0.99}>
+          {lastPhoto ? <Image source={{ uri: lastPhoto.uri }} style={styles.viewfinderImg} /> : null}
+          {lastPhoto || scanning ? <View style={styles.viewfinderShade} /> : null}
+          <Corner style={{ top: 12, left: 12, borderTopWidth: 2.5, borderLeftWidth: 2.5, borderTopLeftRadius: 10 }} />
+          <Corner style={{ top: 12, right: 12, borderTopWidth: 2.5, borderRightWidth: 2.5, borderTopRightRadius: 10 }} />
+          <Corner style={{ bottom: 12, left: 12, borderBottomWidth: 2.5, borderLeftWidth: 2.5, borderBottomLeftRadius: 10 }} />
+          <Corner style={{ bottom: 12, right: 12, borderBottomWidth: 2.5, borderRightWidth: 2.5, borderBottomRightRadius: 10 }} />
 
-        <View style={styles.body}>
-          <View style={styles.scanRow}>
-            <Press style={styles.scanBtn} onPress={() => pickImage(true)} disabled={busy}>
-              <IconBadge name="camera" size={40} />
-              <Text style={styles.scanBtnText}>CAMÉRA</Text>
-            </Press>
-            <Press style={styles.scanBtn} onPress={() => pickImage(false)} disabled={busy}>
-              <IconBadge name="image" size={40} tone="neutral" />
-              <Text style={styles.scanBtnText}>GALERIE</Text>
-            </Press>
-          </View>
-
-          <Press style={styles.noEquipBtn} onPress={() => handleGenerate(true)} disabled={busy} scaleTo={0.98}>
-            <IconBadge name="user" size={44} tone="neutral" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.noEquipTitle}>SANS ÉQUIPEMENT</Text>
-              <Text style={styles.noEquipSub} numberOfLines={1}>Poids du corps · Partout, tout de suite</Text>
-            </View>
-            {generating && equipments.length === 0
-              ? <ActivityIndicator color={C.accent} size="small" />
-              : <Feather name="arrow-right" size={18} color={C.textSecondary} />}
-          </Press>
-
-          {scanning && (
-            <View style={styles.scanningBox}>
-              <ActivityIndicator color={C.accent} size="small" />
+          {scanning ? (
+            <View style={styles.viewfinderCenter}>
+              <ActivityIndicator color={C.accent} />
               <Text style={styles.scanningText}>Analyse en cours…</Text>
             </View>
-          )}
-
-          {photos.length > 0 && (
-            <>
-              <SectionLabel style={styles.spaced}>PHOTOS ({photos.length})</SectionLabel>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                {photos.map((p, i) => (
-                  <View key={i} style={styles.thumb}>
-                    <Image source={{ uri: p.uri }} style={styles.thumbImg} />
-                    <View style={styles.thumbBadge}>
-                      <Feather name="check" size={10} color={C.bg} />
-                      <Text style={styles.thumbBadgeText}>{p.count}</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            </>
-          )}
-
-          <SectionLabel style={styles.spaced} accent={equipments.length > 0}>
-            ÉQUIPEMENTS DÉTECTÉS ({equipments.length})
-          </SectionLabel>
-
-          {equipments.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Feather name="search" size={20} color={C.textMuted} />
-              <Text style={styles.emptyText}>Aucun équipement scanné pour l'instant.</Text>
+          ) : lastPhoto ? (
+            <View style={styles.photoCount}>
+              <Feather name="check" size={11} color={C.bg} />
+              <Text style={styles.photoCountText}>
+                {photos.length} photo{photos.length > 1 ? "s" : ""}
+              </Text>
             </View>
           ) : (
-            <View style={{ gap: 10 }}>
-              {equipments.map((eq, i) => (
+            <View style={styles.viewfinderCenter}>
+              <Feather name="camera" size={20} color={C.textMuted} />
+              <Text style={styles.viewfinderHint}>Vise ton équipement</Text>
+            </View>
+          )}
+        </Press>
+
+        <View style={styles.scanRow}>
+          <PrimaryButton label="CAMÉRA" icon="camera" onPress={() => pickImage(true)} disabled={busy} style={styles.scanBtn} />
+          <GhostButton label="GALERIE" icon="image" onPress={() => !busy && pickImage(false)} style={styles.scanBtn} />
+        </View>
+
+        <Press style={styles.noEquipBtn} onPress={() => handleGenerate(true)} disabled={busy} scaleTo={0.98}>
+          <IconBadge name="user" size={42} color={C.green} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.noEquipTitle}>SANS ÉQUIPEMENT</Text>
+            <Text style={styles.noEquipSub} numberOfLines={1}>Poids du corps · partout</Text>
+          </View>
+          {generating && equipments.length === 0
+            ? <ActivityIndicator color={C.accent} size="small" />
+            : <Feather name="arrow-right" size={18} color={C.textSecondary} />}
+        </Press>
+
+        <View style={styles.detectedHead}>
+          <Text style={styles.label}>DÉTECTÉS</Text>
+          <View style={[styles.countPill, equipments.length === 0 && styles.countPillEmpty]}>
+            <Text style={[styles.countText, equipments.length === 0 && { color: C.textMuted }]}>{equipments.length}</Text>
+          </View>
+        </View>
+
+        {equipments.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>Aucun équipement scanné pour l'instant.</Text>
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {equipments.map((eq, i) => {
+              const cat = categoryOf(eq.category);
+              return (
                 <View key={i} style={styles.equipRow}>
-                  <View style={[styles.equipIconBox, { borderColor: CAT_COLORS[eq.category] || C.border }]}>
-                    <Feather
-                      name={CAT_ICONS[eq.category] || "box"}
-                      size={20}
-                      color={CAT_COLORS[eq.category] || C.textSecondary}
-                    />
-                  </View>
+                  <IconBadge name={cat.icon} family="mci" size={42} color={cat.color} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.equipName}>{eq.name}</Text>
                     <Text style={styles.equipMuscles} numberOfLines={1}>{eq.muscles?.join(" · ") || "—"}</Text>
@@ -158,55 +151,57 @@ export default function ScanScreen({ navigation, route }) {
                     onPress={() => setEquipments((prev) => prev.filter((_, j) => j !== i))}
                     scaleTo={0.85}
                   >
-                    <Feather name="x" size={16} color={C.textSecondary} />
+                    <Feather name="x" size={16} color={C.textMuted} />
                   </Press>
                 </View>
-              ))}
-            </View>
-          )}
-
-          {equipments.length > 0 && (
-            <PrimaryButton
-              label={generating ? "GÉNÉRATION EN COURS…" : "GÉNÉRER MA SÉANCE"}
-              icon={generating ? null : "zap"}
-              onPress={() => handleGenerate(false)}
-              disabled={generating}
-              style={{ marginTop: 28 }}
-            />
-          )}
-        </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
+
+      <FooterBar>
+        <PrimaryButton
+          label={generating && equipments.length > 0 ? "GÉNÉRATION EN COURS…" : "GÉNÉRER MA SÉANCE"}
+          icon={generating ? null : "zap"}
+          onPress={() => handleGenerate(false)}
+          disabled={busy || equipments.length === 0}
+        />
+      </FooterBar>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  container: { paddingBottom: 56 },
+  container: { paddingHorizontal: 24, paddingBottom: 120 },
 
-  back: {
-    flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start",
-    marginLeft: 24, marginTop: 16, marginBottom: 24,
-    backgroundColor: C.surface, borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 9,
+  eyebrow: { ...T.label, color: C.accent, marginBottom: 2 },
+  title: { fontFamily: "BebasNeue_400Regular", fontSize: 46, color: C.textPrimary, letterSpacing: 1.5, lineHeight: 48, marginBottom: 4 },
+  subtitle: { ...T.body, fontSize: 14, marginBottom: 18 },
+  label: { ...T.label, fontSize: 10 },
+
+  viewfinder: {
+    height: 150, borderRadius: R.lg, overflow: "hidden",
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 12,
   },
-  backText: { ...T.label, color: C.textPrimary, fontSize: 10 },
-
-  head: { paddingHorizontal: 24, marginBottom: 28 },
-  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 56, color: C.textPrimary, letterSpacing: 2, lineHeight: 56, marginBottom: 10 },
-  subtitle: { ...T.body },
-
-  body: { paddingHorizontal: 24 },
-  spaced: { marginTop: 28 },
-
-  scanRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  scanBtn: {
-    flex: 1, alignItems: "center", gap: 10, paddingVertical: 20,
-    backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border, ...E.raised,
+  viewfinderImg: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  viewfinderShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,10,10,0.55)" },
+  corner: { position: "absolute", width: 26, height: 26, borderColor: C.accent },
+  viewfinderCenter: { flexDirection: "row", alignItems: "center", gap: 10 },
+  viewfinderHint: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textMuted },
+  scanningText: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: C.accent },
+  photoCount: {
+    position: "absolute", bottom: 14, alignSelf: "center",
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: C.accent, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 4,
   },
-  scanBtnText: { ...T.label, color: C.textPrimary, fontSize: 10 },
+  photoCountText: { fontFamily: "DMSans_700Bold", fontSize: 11, color: C.bg },
+
+  scanRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  scanBtn: { flex: 1, paddingVertical: 15 },
 
   noEquipBtn: {
     flexDirection: "row", alignItems: "center", gap: 14,
@@ -214,44 +209,25 @@ const styles = StyleSheet.create({
     backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
   },
   noEquipTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 19, color: C.textPrimary, letterSpacing: 0.5 },
-  noEquipSub: { ...T.small, marginTop: 2, color: C.textMuted },
+  noEquipSub: { ...T.small, marginTop: 1, color: C.textMuted },
 
-  scanningBox: {
-    flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12,
-    backgroundColor: C.accentSofter, borderRadius: R.md,
-    borderWidth: 1, borderColor: "rgba(200,255,0,0.18)", padding: 14,
-  },
-  scanningText: { ...T.body, color: C.accent },
-
-  thumb: { position: "relative" },
-  thumbImg: { width: 88, height: 88, borderRadius: R.md },
-  thumbBadge: {
-    position: "absolute", bottom: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 3,
-    backgroundColor: C.accent, borderRadius: R.pill, paddingHorizontal: 7, paddingVertical: 3,
-  },
-  thumbBadgeText: { fontFamily: "DMSans_700Bold", color: C.bg, fontSize: 10 },
+  detectedHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 22, marginBottom: 10 },
+  countPill: { minWidth: 22, alignItems: "center", backgroundColor: C.accentSoft, borderRadius: R.pill, paddingHorizontal: 7, paddingVertical: 2 },
+  countPillEmpty: { backgroundColor: C.surface2 },
+  countText: { fontFamily: "DMSans_700Bold", fontSize: 11, color: C.accent },
 
   emptyBox: {
-    alignItems: "center", gap: 8, padding: 28,
-    backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border, borderStyle: "dashed",
+    alignItems: "center", padding: 24,
+    borderRadius: R.lg, borderWidth: 1, borderColor: C.border, borderStyle: "dashed",
   },
-  emptyText: { ...T.body, textAlign: "center" },
+  emptyText: { ...T.body, fontSize: 14, color: C.textMuted, textAlign: "center" },
 
   equipRow: {
-    flexDirection: "row", alignItems: "center", gap: 14,
+    flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border, padding: 12, ...E.raised,
-  },
-  equipIconBox: {
-    width: 48, height: 48, borderRadius: R.md,
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, backgroundColor: C.surface2,
+    borderWidth: 1, borderColor: C.border, padding: 10, ...E.raised,
   },
   equipName: { fontFamily: "DMSans_600SemiBold", fontSize: 15, color: C.textPrimary },
-  equipMuscles: { ...T.small, marginTop: 2, color: C.textMuted },
-  removeBtn: {
-    width: 32, height: 32, borderRadius: R.pill,
-    alignItems: "center", justifyContent: "center", backgroundColor: C.surface2,
-  },
+  equipMuscles: { ...T.small, marginTop: 1, color: C.textMuted },
+  removeBtn: { width: 32, height: 32, borderRadius: R.pill, alignItems: "center", justifyContent: "center" },
 });

@@ -3,13 +3,13 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useFonts } from "expo-font";
 import { BebasNeue_400Regular } from "@expo-google-fonts/bebas-neue";
 import { DMSans_400Regular, DMSans_600SemiBold, DMSans_700Bold } from "@expo-google-fonts/dm-sans";
-import { View, Text, ActivityIndicator, StatusBar, TouchableOpacity, StyleSheet, Animated, ScrollView, Dimensions } from "react-native";
+import { View, ActivityIndicator, StatusBar, TouchableOpacity, StyleSheet, Animated, ScrollView, Dimensions } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRef, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { C } from "./theme";
+import { C, R } from "./theme";
 
 import HomeScreen from "./screens/HomeScreen";
 import NewSessionScreen from "./screens/NewSessionScreen";
@@ -21,9 +21,9 @@ import OnboardingScreen from "./screens/OnboardingScreen";
 
 const Stack = createNativeStackNavigator();
 const TABS = [
-  { label: "TRAINING", icon: "activity" },
+  { label: "TRAINING", icon: "dumbbell", family: "mci" },
   { label: "SCAN", icon: "maximize" },
-  { label: "PROGRÈS", icon: "trending-up" },
+  { label: "PROGRÈS", icon: "bar-chart-2" },
 ];
 const { width: SW } = Dimensions.get("window");
 
@@ -31,7 +31,6 @@ function MainTabs({ navigation }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef(null);
   const brightness = useRef(TABS.map((_, i) => new Animated.Value(i === 0 ? 1 : 0))).current;
-  const isScrolling = useRef(false);
 
   const goTo = (index) => {
     scrollRef.current?.scrollTo({ x: index * SW, animated: true });
@@ -88,24 +87,23 @@ function MainTabs({ navigation }) {
       </ScrollView>
 
       <View style={tabStyles.bar}>
-        <View style={tabStyles.pillRow}>
-          {TABS.map((tab, index) => {
-            const bg = brightness[index].interpolate({
-              inputRange: [0, 1], outputRange: ["rgba(0,0,0,0)", C.accentSoft],
-            });
-            const color = brightness[index].interpolate({
-              inputRange: [0, 1], outputRange: [C.textMuted, C.accent],
-            });
-            return (
-              <TouchableOpacity key={index} style={tabStyles.tab} onPress={() => goTo(index)} activeOpacity={0.8}>
-                <Animated.View style={[tabStyles.pill, { backgroundColor: bg }]}>
-                  <Feather name={tab.icon} size={17} color={activeIndex === index ? C.accent : C.textMuted} />
-                  <Animated.Text style={[tabStyles.label, { color }]}>{tab.label}</Animated.Text>
-                </Animated.View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {TABS.map((tab, index) => {
+          const bg = brightness[index].interpolate({
+            inputRange: [0, 1], outputRange: ["rgba(0,0,0,0)", C.accentSoft],
+          });
+          const color = brightness[index].interpolate({
+            inputRange: [0, 1], outputRange: [C.textMuted, C.accent],
+          });
+          const Icon = tab.family === "mci" ? MaterialCommunityIcons : Feather;
+          return (
+            <TouchableOpacity key={index} style={tabStyles.tab} onPress={() => goTo(index)} activeOpacity={0.8}>
+              <Animated.View style={[tabStyles.pill, { backgroundColor: bg }]}>
+                <Icon name={tab.icon} size={19} color={activeIndex === index ? C.accent : C.textMuted} />
+                <Animated.Text style={[tabStyles.label, { color }]}>{tab.label}</Animated.Text>
+              </Animated.View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -160,18 +158,15 @@ export default function App() {
 
 const tabStyles = StyleSheet.create({
   bar: {
-    backgroundColor: C.bg,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 26,
-    borderTopWidth: 1,
-    borderColor: C.border,
+    flexDirection: "row", gap: 8,
+    backgroundColor: C.surface,
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 24,
+    borderTopWidth: 1, borderColor: C.border,
   },
-  pillRow: { flexDirection: "row", gap: 8 },
   tab: { flex: 1 },
   pill: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    paddingVertical: 11, borderRadius: 999,
+    alignItems: "center", justifyContent: "center", gap: 5,
+    paddingVertical: 10, borderRadius: R.md,
   },
-  label: { fontFamily: "DMSans_600SemiBold", fontSize: 11, letterSpacing: 1.2 },
+  label: { fontFamily: "DMSans_600SemiBold", fontSize: 10, letterSpacing: 1.2 },
 });

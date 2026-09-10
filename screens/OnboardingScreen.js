@@ -4,39 +4,42 @@ import {
   Animated, Dimensions, StatusBar, Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Feather } from "@expo/vector-icons";
 import { C, T, R } from "../theme";
 import { PrimaryButton } from "../ui/kit";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const SLIDE_DURATION = 10000;
+const PHOTO_HEIGHT = SH * 0.62;
+const FADE_STEPS = 14;
 
 const SLIDES = [
   {
-    eyebrow: "BIENVENUE",
-    title: "ENTRAINE-TOI\nINTELLIGEMMENT.",
+    chip: "BIENVENUE · 01/04",
+    icon: "zap",
+    title: "ENTRAÎNE-TOI\nINTELLIGEMMENT.",
     body: "FitScan analyse ton équipement et génère des séances personnalisées pour toi, en quelques secondes.",
-    accent: "01 / 04",
     image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80",
   },
   {
-    eyebrow: "ÉTAPE 1",
+    chip: "ÉTAPE 1 · 02/04",
+    icon: "maximize",
     title: "SCANNE\nTON MATOS.",
     body: "Prends une photo de ton équipement — haltères, machines, barres. L'IA identifie tout automatiquement.",
-    accent: "02 / 04",
     image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&q=80",
   },
   {
-    eyebrow: "ÉTAPE 2",
+    chip: "ÉTAPE 2 · 03/04",
+    icon: "sliders",
     title: "GÉNÈRE\nTA SÉANCE.",
     body: "Choisis ton niveau, ton objectif et ta durée. FitScan crée un programme adapté avec vidéos d'exécution.",
-    accent: "03 / 04",
     image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80",
   },
   {
-    eyebrow: "ÉTAPE 3",
+    chip: "ÉTAPE 3 · 04/04",
+    icon: "bar-chart-2",
     title: "SUIS TA\nPROGRESSION.",
     body: "Note tes poids, consulte tes stats et vois tes muscles les plus travaillés. Progresse séance après séance.",
-    accent: "04 / 04",
     image: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=800&q=80",
   },
 ];
@@ -66,10 +69,9 @@ export default function OnboardingScreen({ onDone }) {
     if (animRef.current) animRef.current.stop();
     startTimeRef.current = Date.now();
     progresses[current].setValue(from);
-    const remaining = SLIDE_DURATION * (1 - from);
     animRef.current = Animated.timing(progresses[current], {
       toValue: 1,
-      duration: remaining,
+      duration: SLIDE_DURATION * (1 - from),
       useNativeDriver: false,
     });
     animRef.current.start(({ finished }) => {
@@ -100,8 +102,7 @@ export default function OnboardingScreen({ onDone }) {
 
   const handleTap = (e) => {
     if (pausedRef.current) return;
-    const x = e.nativeEvent.locationX;
-    if (x > SW / 2) goTo(current + 1);
+    if (e.nativeEvent.locationX > SW / 2) goTo(current + 1);
     else goTo(current - 1);
   };
 
@@ -112,17 +113,20 @@ export default function OnboardingScreen({ onDone }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <Image source={{ uri: slide.image }} style={styles.bgImage} />
+      <Image source={{ uri: slide.image }} style={styles.photo} />
+      {/* Fondu de la photo vers le fond, sans dépendance de dégradé */}
+      <View style={styles.fade} pointerEvents="none">
+        {Array.from({ length: FADE_STEPS }).map((_, i) => (
+          <View key={i} style={{ flex: 1, backgroundColor: C.bg, opacity: (i + 1) / FADE_STEPS }} />
+        ))}
+      </View>
 
-      {/* Barres de progression */}
       <View style={styles.bars}>
         {SLIDES.map((_, i) => (
           <View key={i} style={styles.barBg}>
             <Animated.View
               style={[styles.barFill, {
-                width: progresses[i].interpolate({
-                  inputRange: [0, 1], outputRange: ["0%", "100%"],
-                }),
+                width: progresses[i].interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
               }]}
             />
           </View>
@@ -133,7 +137,7 @@ export default function OnboardingScreen({ onDone }) {
         <Text style={styles.skipText}>PASSER</Text>
       </TouchableOpacity>
 
-      {/* Zone principale — tap pour avancer, maintenir pour pauser */}
+      {/* Tap à droite / gauche pour naviguer, maintenir pour pauser */}
       <TouchableOpacity
         style={styles.tapZone}
         onPress={handleTap}
@@ -142,19 +146,20 @@ export default function OnboardingScreen({ onDone }) {
         delayLongPress={150}
         activeOpacity={1}
       >
-        <View style={styles.sheet}>
-          <View style={styles.grabber} />
-
-          <Text style={styles.accentText}>{slide.accent}</Text>
-          <Text style={styles.eyebrow}>{slide.eyebrow}</Text>
+        <View style={styles.content}>
+          <View style={styles.chip}>
+            <Feather name={slide.icon} size={12} color={C.accent} />
+            <Text style={styles.chipText}>{slide.chip}</Text>
+          </View>
           <Text style={styles.title}>{slide.title}</Text>
           <Text style={styles.body}>{slide.body}</Text>
 
-          {isLast ? (
-            <PrimaryButton label="COMMENCER" icon="arrow-right" onPress={handleDone} style={styles.startBtn} />
-          ) : (
-            <Text style={styles.tapHintText}>Maintenir pour pauser · Appuyer pour avancer</Text>
-          )}
+          <PrimaryButton
+            label={isLast ? "COMMENCER" : "CONTINUER"}
+            onPress={() => (isLast ? handleDone() : goTo(current + 1))}
+            style={styles.cta}
+          />
+          <Text style={styles.hint}>Maintenir pour pauser · appuyer pour avancer</Text>
         </View>
       </TouchableOpacity>
     </View>
@@ -164,67 +169,32 @@ export default function OnboardingScreen({ onDone }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 
-  bgImage: {
-    position: "absolute",
-    top: 0, left: 0, right: 0,
-    height: SH * 0.58,
-    resizeMode: "cover",
-  },
+  photo: { position: "absolute", top: 0, left: 0, right: 0, height: PHOTO_HEIGHT, resizeMode: "cover" },
+  fade: { position: "absolute", left: 0, right: 0, top: PHOTO_HEIGHT * 0.45, height: PHOTO_HEIGHT * 0.55 },
 
-  bars: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    gap: 4,
-    zIndex: 10,
-  },
-  barBg: {
-    flex: 1, height: 3,
-    borderRadius: R.pill,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    overflow: "hidden",
-  },
+  bars: { flexDirection: "row", paddingHorizontal: 16, paddingTop: 52, gap: 4, zIndex: 10 },
+  barBg: { flex: 1, height: 3, borderRadius: R.pill, backgroundColor: "rgba(255,255,255,0.25)", overflow: "hidden" },
   barFill: { height: "100%", borderRadius: R.pill, backgroundColor: "#fff" },
 
   skipBtn: {
-    position: "absolute",
-    top: 96, right: 20, zIndex: 20,
-    paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: R.pill,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
+    position: "absolute", top: 72, right: 16, zIndex: 20,
+    paddingVertical: 7, paddingHorizontal: 13, borderRadius: R.pill,
+    backgroundColor: "rgba(10,10,10,0.6)", borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
   },
-  skipText: { fontFamily: "DMSans_600SemiBold", fontSize: 11, color: "#fff", letterSpacing: 1.5 },
+  skipText: { fontFamily: "DMSans_700Bold", fontSize: 10, color: C.textPrimary, letterSpacing: 1.5 },
 
   tapZone: { flex: 1, justifyContent: "flex-end" },
+  content: { paddingHorizontal: 24, paddingBottom: 36 },
 
-  sheet: {
-    backgroundColor: C.bg,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 14,
-    paddingBottom: 40,
+  chip: {
+    flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start",
+    borderWidth: 1, borderColor: "rgba(200,255,0,0.4)", backgroundColor: C.accentSofter,
+    borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 14,
   },
-  grabber: {
-    width: 40, height: 4, borderRadius: R.pill,
-    backgroundColor: C.border,
-    alignSelf: "center", marginBottom: 22,
-  },
+  chipText: { fontFamily: "DMSans_700Bold", fontSize: 10, color: C.accent, letterSpacing: 1.2 },
+  title: { fontFamily: "BebasNeue_400Regular", fontSize: 54, color: C.textPrimary, letterSpacing: 2, lineHeight: 54, marginBottom: 12 },
+  body: { fontFamily: "DMSans_400Regular", fontSize: 15, color: C.textSecondary, lineHeight: 23, maxWidth: 330 },
 
-  accentText: { fontFamily: "BebasNeue_400Regular", fontSize: 13, color: C.accent, letterSpacing: 3, marginBottom: 12 },
-  eyebrow: { ...T.label, color: C.textMuted, marginBottom: 12 },
-  title: {
-    fontFamily: "BebasNeue_400Regular",
-    fontSize: 50, color: C.textPrimary,
-    letterSpacing: 2, lineHeight: 50, marginBottom: 14,
-  },
-  body: {
-    fontFamily: "DMSans_400Regular",
-    fontSize: 15, color: C.textSecondary,
-    lineHeight: 24, maxWidth: 320,
-  },
-
-  startBtn: { marginTop: 28 },
-  tapHintText: { ...T.small, color: C.textMuted, textAlign: "center", marginTop: 24 },
+  cta: { marginTop: 26 },
+  hint: { ...T.small, fontSize: 11, color: C.textMuted, textAlign: "center", marginTop: 12 },
 });

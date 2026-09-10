@@ -1,15 +1,32 @@
 import React, { useEffect, useState, useRef } from "react";
-import {
-  View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput,
-} from "react-native";
+import { View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { saveSession, saveWeight, getLastWeight } from "../data/storage";
 import { C, T, R, E } from "../theme";
-import { Press, PrimaryButton, SectionLabel, ProgressBar } from "../ui/kit";
+import { Press, PrimaryButton, ProgressBar, BackButton, FooterBar } from "../ui/kit";
 import RestTimerScreen from "./RestTimerScreen";
 import SessionCompleteScreen from "./SessionCompleteScreen";
+
+const setsOf = (ex) => ex?.sets || 3;
+const pad2 = (n) => String(n).padStart(2, "0");
+
+// ─── Chrono écoulé ────────────────────────────────────────────────
+// Isolé dans son propre composant : le tic d'une seconde ne re-rend que lui.
+function ElapsedBadge({ startedAt }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const s = Math.max(0, Math.floor((now - startedAt) / 1000));
+  return (
+    <View style={styles.elapsed}>
+      <Text style={styles.elapsedText}>{pad2(Math.floor(s / 60))}:{pad2(s % 60)}</Text>
+    </View>
+  );
+}
 
 // ─── Sélecteur de poids ───────────────────────────────────────────
 function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
@@ -26,17 +43,15 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
 
   return (
     <View style={ws.wrap}>
-      <Text style={ws.label}>POIDS UTILISÉ</Text>
-      {lastWeight && (
-        <View style={ws.hintRow}>
-          <Feather name="trending-up" size={12} color={C.accent} />
+      <View style={ws.head}>
+        <Text style={ws.label}>POIDS UTILISÉ</Text>
+        {lastWeight ? (
           <Text style={ws.hint}>
-            Dernière fois : {lastWeight.weight}{lastWeight.unit}
-            {suggestedWeight ? "   →   Suggéré : " + suggestedWeight + lastWeight.unit : ""}
+            {lastWeight.weight} {lastWeight.unit} → {suggestedWeight} {lastWeight.unit} suggéré
           </Text>
-        </View>
-      )}
-      <View style={ws.inputRow}>
+        ) : null}
+      </View>
+      <View style={ws.row}>
         <TextInput
           style={ws.input}
           placeholder="0"
@@ -46,15 +61,15 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
           onChangeText={setWeight}
           maxLength={6}
         />
-        {["kg", "lbs"].map((u) => (
-          <Press key={u} style={[ws.unitBtn, unit === u && ws.unitBtnActive]} onPress={() => setUnit(u)} scaleTo={0.9}>
-            <Text style={[ws.unitText, unit === u && { color: C.textPrimary }]}>{u}</Text>
-          </Press>
-        ))}
-        <Press style={[ws.saveBtn, saved && { backgroundColor: C.green }]} onPress={handleSave} scaleTo={0.92}>
-          {saved
-            ? <Feather name="check" size={16} color={C.bg} />
-            : <Text style={ws.saveBtnText}>OK</Text>}
+        <View style={ws.unitGroup}>
+          {["kg", "lbs"].map((u) => (
+            <Press key={u} style={[ws.unitBtn, unit === u && ws.unitBtnActive]} onPress={() => setUnit(u)} scaleTo={0.9}>
+              <Text style={[ws.unitText, unit === u && { color: C.textPrimary }]}>{u}</Text>
+            </Press>
+          ))}
+        </View>
+        <Press style={[ws.saveBtn, saved && { backgroundColor: C.green }]} onPress={handleSave} scaleTo={0.9}>
+          <Feather name="check" size={18} color={C.bg} />
         </Press>
       </View>
     </View>
@@ -62,10 +77,10 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
 }
 
 // ─── Exercice ─────────────────────────────────────────────────────
-function ExerciseCard({ ex, index, onSetsChange }) {
-  const totalSets = ex.sets || 3;
+function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
+  const totalSets = setsOf(ex);
   const [done, setDone] = useState([]);
-  const [showTimer, setShowTimer] = useState(false);
+  const [timerSet, setTimerSet] = useState(null);
   const [lastWeight, setLastWeight] = useState(null);
   const allDone = done.length === totalSets;
 
@@ -81,46 +96,76 @@ function ExerciseCard({ ex, index, onSetsChange }) {
     const wasDone = done.includes(i);
     const next = wasDone ? done.filter((s) => s !== i) : [...done, i];
     setDone(next);
-    if (!wasDone && next.length < totalSets) setShowTimer(true);
+    if (!wasDone && next.length < totalSets) setTimerSet(next.length);
     onSetsChange?.(index, next.length);
   };
 
+  // Le Modal vit hors des deux vues : replier la carte ne coupe pas un repos en cours.
+  const timer = (
+    <Modal visible={timerSet !== null} transparent animationType="fade" onRequestClose={() => setTimerSet(null)}>
+      <RestTimerScreen
+        seconds={ex.rest || 60}
+        setNumber={timerSet}
+        totalSets={totalSets}
+        exerciseName={ex.name}
+        onClose={() => setTimerSet(null)}
+      />
+    </Modal>
+  );
+
+  if (!expanded) {
+    return (
+      <>
+        {timer}
+        <Press style={[styles.collapsed, allDone && styles.collapsedDone]} onPress={onExpand} scaleTo={0.985}>
+          {allDone ? (
+            <View style={[styles.indexBox, styles.indexBoxDone]}>
+              <Feather name="check" size={16} color={C.bg} />
+            </View>
+          ) : (
+            <Text style={styles.collapsedIndex}>{pad2(index + 1)}</Text>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.collapsedName, allDone && { color: C.textSecondary }]} numberOfLines={1}>
+              {ex.name.toUpperCase()}
+            </Text>
+            <Text style={styles.collapsedMeta}>
+              {ex.sets} × {ex.reps} · {ex.rest}s{done.length > 0 && !allDone ? ` · ${done.length}/${totalSets} séries` : ""}
+            </Text>
+          </View>
+          <Feather name="chevron-down" size={18} color={C.textMuted} />
+        </Press>
+      </>
+    );
+  }
+
   return (
     <View style={[styles.exCard, allDone && styles.exCardDone]}>
-      <Modal visible={showTimer} transparent animationType="fade" onRequestClose={() => setShowTimer(false)}>
-        <RestTimerScreen seconds={ex.rest || 60} onClose={() => setShowTimer(false)} />
-      </Modal>
+      {timer}
 
       <View style={styles.exTop}>
-        <View style={[styles.exIndexBox, allDone && { backgroundColor: C.accent, borderColor: C.accent }]}>
-          <Text style={[styles.exIndex, allDone && { color: C.bg }]}>{String(index + 1).padStart(2, "0")}</Text>
+        <View style={[styles.indexBox, allDone && styles.indexBoxDone]}>
+          {allDone
+            ? <Feather name="check" size={16} color={C.bg} />
+            : <Text style={styles.indexText}>{pad2(index + 1)}</Text>}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.exName}>{ex.name.toUpperCase()}</Text>
-          <Text style={styles.exEquip}>{ex.equipment}</Text>
+          {ex.equipment ? <Text style={styles.exEquip}>{ex.equipment}</Text> : null}
         </View>
-        {allDone && (
-          <View style={styles.doneBadge}>
-            <Feather name="check" size={14} color={C.bg} />
-          </View>
-        )}
       </View>
 
-      <View style={styles.statsLine}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNum} numberOfLines={1} adjustsFontSizeToFit>{ex.sets}</Text>
-          <Text style={styles.statLbl}>séries</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNum} numberOfLines={1} adjustsFontSizeToFit>{ex.reps}</Text>
-          <Text style={styles.statLbl}>répétitions</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNum} numberOfLines={1} adjustsFontSizeToFit>{ex.rest}s</Text>
-          <Text style={styles.statLbl}>repos</Text>
-        </View>
+      <View style={styles.tiles}>
+        {[
+          [ex.sets, "séries"],
+          [ex.reps, "reps"],
+          [`${ex.rest}s`, "repos"],
+        ].map(([value, label]) => (
+          <View key={label} style={styles.tile}>
+            <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+            <Text style={styles.tileLabel}>{label}</Text>
+          </View>
+        ))}
       </View>
 
       {ex.requiresWeight && (
@@ -135,7 +180,7 @@ function ExerciseCard({ ex, index, onSetsChange }) {
               key={i}
               style={[styles.setBtn, isDone && styles.setBtnDone]}
               onPress={() => toggleSet(i)}
-              scaleTo={0.88}
+              scaleTo={0.9}
             >
               {isDone
                 ? <Feather name="check" size={18} color={C.bg} />
@@ -155,25 +200,39 @@ function ExerciseCard({ ex, index, onSetsChange }) {
         </View>
       )}
 
-      {ex.tips && (
-        <View style={styles.tipsBox}>
-          <Feather name="info" size={13} color={C.accent} />
-          <Text style={styles.tips}>{ex.tips}</Text>
+      {ex.tips ? (
+        <View style={styles.tipBox}>
+          <MaterialCommunityIcons name="lightbulb-outline" size={16} color={C.amber} />
+          <Text style={styles.tipText}>{ex.tips}</Text>
         </View>
-      )}
+      ) : null}
 
-      {ex.youtubeQuery && (
+      {ex.youtubeQuery ? (
         <Press
-          style={styles.videoBtn}
+          style={styles.videoRow}
           onPress={() => Linking.openURL("https://www.youtube.com/results?search_query=" + encodeURIComponent(ex.youtubeQuery))}
-          scaleTo={0.96}
+          scaleTo={0.98}
         >
           <View style={styles.videoPlay}>
             <Feather name="play" size={11} color="#fff" />
           </View>
-          <Text style={styles.videoBtnText}>VOIR L'EXÉCUTION</Text>
+          <Text style={styles.videoText}>Voir l'exécution</Text>
         </Press>
-      )}
+      ) : null}
+    </View>
+  );
+}
+
+function PhaseBlock({ icon, title, block }) {
+  return (
+    <View style={styles.phase}>
+      <View style={styles.phaseHead}>
+        <Feather name={icon} size={13} color={C.accent} />
+        <Text style={styles.phaseLabel}>{title} — {block.duration} MIN</Text>
+      </View>
+      {block.exercises?.map((item, i) => (
+        <Text key={i} style={styles.phaseItem}>· {item}</Text>
+      ))}
     </View>
   );
 }
@@ -185,14 +244,28 @@ export default function WorkoutScreen({ navigation, route }) {
   const [saveFailed, setSaveFailed] = useState(false);
   const [elapsedMin, setElapsedMin] = useState(0);
   const [progress, setProgress] = useState({});
+  const [openIndex, setOpenIndex] = useState(0);
   const startedAt = useRef(Date.now());
   const alreadySaved = useRef(false);
 
   if (!workout) return null;
 
-  const totalSets = (workout.exercises || []).reduce((a, ex) => a + (ex.sets || 3), 0);
+  const exercises = workout.exercises || [];
+  const totalSets = exercises.reduce((a, ex) => a + setsOf(ex), 0);
   const setsDone = Object.values(progress).reduce((a, n) => a + n, 0);
   const ratio = totalSets > 0 ? setsDone / totalSets : 0;
+
+  /* Un exercice terminé se replie et ouvre le suivant encore incomplet,
+     en repartant du début si des exercices précédents ont été sautés. */
+  const handleSetsChange = (idx, n) => {
+    const merged = { ...progress, [idx]: n };
+    setProgress(merged);
+    if (idx !== openIndex || n < setsOf(exercises[idx])) return;
+    const incomplete = (i) => (merged[i] || 0) < setsOf(exercises[i]);
+    let next = exercises.findIndex((_, i) => i > idx && incomplete(i));
+    if (next === -1) next = exercises.findIndex((_, i) => incomplete(i));
+    if (next !== -1) setOpenIndex(next);
+  };
 
   /* La séance n'est enregistrée qu'ici : la sauver à l'ouverture comptait une
      séance pour un simple aller-retour sur l'écran. */
@@ -236,103 +309,55 @@ export default function WorkoutScreen({ navigation, route }) {
         />
       </Modal>
 
-      {!readOnly && (
-        <View style={styles.progressBar}>
-          <ProgressBar value={ratio} height={4} />
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <BackButton onPress={() => navigation.goBack()} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{workout.title?.toUpperCase()}</Text>
+            <Text style={styles.headerMeta}>
+              {workout.totalDuration} min · {exercises.length} exercices
+            </Text>
+          </View>
+          {!readOnly && <ElapsedBadge startedAt={startedAt.current} />}
         </View>
-      )}
+        {!readOnly && (
+          <View style={styles.headerProgress}>
+            <ProgressBar value={ratio} height={4} />
+          </View>
+        )}
+      </View>
 
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, readOnly && { paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid
         extraScrollHeight={120}
         enableAutomaticScroll
       >
-        <Press style={styles.back} onPress={() => navigation.goBack()} scaleTo={0.92}>
-          <Feather name="arrow-left" size={16} color={C.textPrimary} />
-          <Text style={styles.backText}>RETOUR</Text>
-        </Press>
+        {workout.warmup && <PhaseBlock icon="sunrise" title="ÉCHAUFFEMENT" block={workout.warmup} />}
 
-        <View style={styles.head}>
-          <Text style={styles.eyebrow}>TA SÉANCE</Text>
-          <Text style={styles.title}>{workout.title?.toUpperCase()}</Text>
-          <View style={styles.metaRow}>
-            <View style={styles.metaChip}>
-              <Feather name="clock" size={12} color={C.textSecondary} />
-              <Text style={styles.metaText}>{workout.totalDuration} MIN</Text>
-            </View>
-            <View style={styles.metaChip}>
-              <Feather name="list" size={12} color={C.textSecondary} />
-              <Text style={styles.metaText}>{workout.exercises?.length} EXERCICES</Text>
-            </View>
-            {!readOnly && (
-              <View style={[styles.metaChip, { backgroundColor: C.accentSoft, borderColor: "rgba(200,255,0,0.25)" }]}>
-                <Text style={[styles.metaText, { color: C.accent }]}>{setsDone}/{totalSets} SÉRIES</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.body}>
-          <View style={styles.hint}>
-            <Feather name="watch" size={14} color={C.accent} />
-            <Text style={styles.hintText}>Coche chaque série pour déclencher le chrono de repos.</Text>
-          </View>
-          <View style={[styles.hint, { borderColor: "rgba(245,158,11,0.25)", backgroundColor: "rgba(245,158,11,0.06)" }]}>
-            <Feather name="alert-circle" size={14} color={C.amber} />
-            <Text style={styles.hintText}>
-              Commence avec une charge que tu tiens sur toutes les séries — mieux vaut trop léger que se blesser.
-            </Text>
-          </View>
-
-          {workout.warmup && (
-            <View style={styles.block}>
-              <View style={styles.blockHead}>
-                <Feather name="sunrise" size={14} color={C.accent} />
-                <Text style={styles.blockLabel}>ÉCHAUFFEMENT — {workout.warmup.duration} MIN</Text>
-              </View>
-              {workout.warmup.exercises?.map((ex, i) => (
-                <Text key={i} style={styles.blockItem}>· {ex}</Text>
-              ))}
-            </View>
-          )}
-
-          <SectionLabel style={{ marginTop: 4 }} accent>EXERCICES</SectionLabel>
-          <View style={{ gap: 14 }}>
-            {workout.exercises?.map((ex, i) => (
-              <ExerciseCard
-                key={i}
-                ex={ex}
-                index={i}
-                onSetsChange={(idx, n) => setProgress((p) => ({ ...p, [idx]: n }))}
-              />
-            ))}
-          </View>
-
-          {workout.cooldown && (
-            <View style={[styles.block, { marginTop: 24 }]}>
-              <View style={styles.blockHead}>
-                <Feather name="wind" size={14} color={C.blue} />
-                <Text style={styles.blockLabel}>RETOUR AU CALME — {workout.cooldown.duration} MIN</Text>
-              </View>
-              {workout.cooldown.exercises?.map((ex, i) => (
-                <Text key={i} style={styles.blockItem}>· {ex}</Text>
-              ))}
-            </View>
-          )}
-
-          {!readOnly && (
-            <PrimaryButton
-              label="TERMINER LA SÉANCE"
-              icon="flag"
-              style={{ marginTop: 28 }}
-              onPress={finishSession}
+        <View style={{ gap: 10 }}>
+          {exercises.map((ex, i) => (
+            <ExerciseCard
+              key={i}
+              ex={ex}
+              index={i}
+              expanded={i === openIndex}
+              onExpand={() => setOpenIndex(i)}
+              onSetsChange={handleSetsChange}
             />
-          )}
+          ))}
         </View>
+
+        {workout.cooldown && <PhaseBlock icon="wind" title="RETOUR AU CALME" block={workout.cooldown} />}
       </KeyboardAwareScrollView>
+
+      {!readOnly && (
+        <FooterBar>
+          <PrimaryButton label="TERMINER LA SÉANCE" onPress={finishSession} />
+        </FooterBar>
+      )}
     </SafeAreaView>
   );
 }
@@ -340,111 +365,96 @@ export default function WorkoutScreen({ navigation, route }) {
 // ─── Styles poids ─────────────────────────────────────────────────
 const ws = StyleSheet.create({
   wrap: {
-    marginBottom: 14, padding: 14,
-    backgroundColor: C.surface2, borderRadius: R.md,
-    borderWidth: 1, borderColor: C.border,
+    marginBottom: 14, padding: 12,
+    backgroundColor: C.accentSofter, borderRadius: R.md,
+    borderWidth: 1, borderColor: "rgba(200,255,0,0.22)",
   },
-  label: { ...T.label, fontSize: 10, marginBottom: 6 },
-  hintRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
-  hint: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.accent, flex: 1 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 },
+  label: { ...T.label, fontSize: 9 },
+  hint: { flexShrink: 1, fontFamily: "DMSans_600SemiBold", fontSize: 11, color: C.accent, textAlign: "right" },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
   input: {
-    width: 74, height: 44, borderRadius: R.sm,
+    flex: 1, height: 46, borderRadius: R.sm,
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
     color: C.textPrimary, fontFamily: "DMSans_700Bold", fontSize: 18,
     textAlign: "center", paddingVertical: 0, includeFontPadding: false,
   },
-  unitBtn: {
-    paddingHorizontal: 12, paddingVertical: 11, borderRadius: R.sm,
-    borderWidth: 1, borderColor: C.border,
-  },
-  unitBtnActive: { borderColor: C.textPrimary, backgroundColor: C.surfaceHi },
+  unitGroup: { flexDirection: "row", backgroundColor: C.bg, borderRadius: R.sm, borderWidth: 1, borderColor: C.border, padding: 3 },
+  unitBtn: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: R.xs },
+  unitBtnActive: { backgroundColor: C.surfaceHi },
   unitText: { fontFamily: "DMSans_600SemiBold", fontSize: 12, color: C.textMuted },
   saveBtn: {
-    marginLeft: "auto", minWidth: 52, alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 11,
-    borderRadius: R.sm, backgroundColor: C.accent,
+    width: 46, height: 46, borderRadius: R.sm,
+    backgroundColor: C.accent, alignItems: "center", justifyContent: "center",
   },
-  saveBtnText: { fontFamily: "DMSans_700Bold", fontSize: 13, color: C.bg },
 });
 
 // ─── Styles écran ─────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  container: { paddingBottom: 56 },
+  container: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 120 },
 
-  progressBar: { paddingHorizontal: 24, paddingTop: 6 },
-
-  back: {
-    flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start",
-    marginLeft: 24, marginTop: 16, marginBottom: 24,
-    backgroundColor: C.surface, borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 9,
+  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, backgroundColor: C.bg, borderBottomWidth: 1, borderColor: C.border },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.textPrimary, letterSpacing: 0.5, lineHeight: 26 },
+  headerMeta: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textSecondary },
+  headerProgress: { marginTop: 12 },
+  elapsed: {
+    borderWidth: 1, borderColor: "rgba(200,255,0,0.45)", backgroundColor: C.accentSofter,
+    borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4,
   },
-  backText: { ...T.label, color: C.textPrimary, fontSize: 10 },
+  elapsedText: { fontFamily: "DMSans_700Bold", fontSize: 12, color: C.accent, letterSpacing: 0.5 },
 
-  head: { paddingHorizontal: 24, marginBottom: 24 },
-  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 42, color: C.textPrimary, letterSpacing: 1, lineHeight: 44, marginBottom: 14 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  metaChip: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: C.surface, borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 11, paddingVertical: 6,
-  },
-  metaText: { ...T.label, fontSize: 9, color: C.textSecondary },
-
-  body: { paddingHorizontal: 24 },
-
-  hint: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12,
-    backgroundColor: C.accentSofter, borderRadius: R.md,
-    borderWidth: 1, borderColor: "rgba(200,255,0,0.18)", padding: 14,
-  },
-  hintText: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, flex: 1, lineHeight: 19 },
-
-  block: {
-    marginTop: 16, marginBottom: 20, padding: 16,
+  phase: {
     backgroundColor: C.surface, borderRadius: R.lg,
     borderWidth: 1, borderColor: C.border,
+    padding: 14, marginVertical: 10,
   },
-  blockHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  blockLabel: { ...T.label, fontSize: 10, color: C.textPrimary },
-  blockItem: { fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, marginBottom: 6, lineHeight: 20 },
+  phaseHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  phaseLabel: { ...T.label, fontSize: 10, color: C.textPrimary },
+  phaseItem: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, lineHeight: 20 },
+
+  collapsed: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: C.surface, borderRadius: R.lg,
+    borderWidth: 1, borderColor: C.border,
+    paddingVertical: 14, paddingHorizontal: 16,
+  },
+  collapsedDone: { backgroundColor: C.accentSofter, borderColor: "rgba(200,255,0,0.2)" },
+  collapsedIndex: { width: 34, fontFamily: "BebasNeue_400Regular", fontSize: 22, color: C.textMuted, textAlign: "center" },
+  collapsedName: { fontFamily: "BebasNeue_400Regular", fontSize: 19, color: C.textPrimary, letterSpacing: 0.3 },
+  collapsedMeta: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textMuted },
 
   exCard: {
     backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border, padding: 18, ...E.raised,
+    borderWidth: 1, borderColor: C.borderHi,
+    padding: 16,
+    ...E.raised,
   },
-  exCardDone: { borderColor: "rgba(200,255,0,0.3)", backgroundColor: C.accentSofter },
-
-  exTop: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
-  exIndexBox: {
-    width: 42, height: 42, borderRadius: R.md,
+  exCardDone: { borderColor: "rgba(200,255,0,0.35)" },
+  exTop: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  indexBox: {
+    width: 34, height: 34, borderRadius: R.xs,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.accentSoft,
   },
-  exIndex: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: C.textSecondary, lineHeight: 22 },
-  exName: { fontFamily: "BebasNeue_400Regular", fontSize: 26, color: C.textPrimary, lineHeight: 28 },
-  exEquip: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textMuted, marginTop: 2 },
-  doneBadge: {
-    width: 28, height: 28, borderRadius: R.pill,
-    backgroundColor: C.accent, alignItems: "center", justifyContent: "center",
-  },
+  indexBoxDone: { backgroundColor: C.accent },
+  indexText: { fontFamily: "BebasNeue_400Regular", fontSize: 19, color: C.accent },
+  exName: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.textPrimary, lineHeight: 26 },
+  exEquip: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textMuted, marginTop: 1 },
 
-  statsLine: {
-    flexDirection: "row", alignItems: "center", marginBottom: 14,
-    backgroundColor: C.surface2, borderRadius: R.md, paddingVertical: 12,
+  tiles: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  tile: {
+    flex: 1, alignItems: "center", paddingVertical: 10,
+    backgroundColor: C.surface2, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border,
   },
-  statItem: { flex: 1, alignItems: "center" },
-  statDivider: { width: 1, height: 26, backgroundColor: C.border },
-  statNum: { fontFamily: "DMSans_700Bold", fontSize: 20, color: C.accent, lineHeight: 22 },
-  statLbl: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textMuted, marginTop: 1 },
+  tileValue: { fontFamily: "DMSans_700Bold", fontSize: 20, color: C.accent, lineHeight: 24 },
+  tileLabel: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textMuted },
 
-  setsRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
+  setsRow: { flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" },
   setBtn: {
-    width: 46, height: 46, borderRadius: R.md,
+    flex: 1, minWidth: 52, height: 46, borderRadius: R.md,
     alignItems: "center", justifyContent: "center",
     backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
   },
@@ -459,21 +469,17 @@ const styles = StyleSheet.create({
   },
   muscleChipText: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textSecondary },
 
-  tipsBox: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 12,
-    backgroundColor: C.accentSofter, borderRadius: R.md, padding: 12,
+  tipBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10,
+    backgroundColor: C.surface2, borderRadius: R.md, padding: 12,
   },
-  tips: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, lineHeight: 19, flex: 1 },
+  tipText: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, lineHeight: 19 },
 
-  videoBtn: {
-    flexDirection: "row", alignItems: "center", gap: 10, alignSelf: "flex-start",
-    backgroundColor: C.surface2, borderRadius: R.pill,
-    borderWidth: 1, borderColor: C.border,
-    paddingVertical: 8, paddingHorizontal: 12,
+  videoRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: C.surface2, borderRadius: R.md,
+    paddingVertical: 10, paddingHorizontal: 12,
   },
-  videoPlay: {
-    width: 24, height: 24, borderRadius: R.pill, backgroundColor: "#FF0000",
-    alignItems: "center", justifyContent: "center",
-  },
-  videoBtnText: { fontFamily: "DMSans_600SemiBold", fontSize: 12, color: C.textPrimary, letterSpacing: 0.5 },
+  videoPlay: { width: 24, height: 24, borderRadius: 6, backgroundColor: "#FF0000", alignItems: "center", justifyContent: "center" },
+  videoText: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: C.textPrimary },
 });

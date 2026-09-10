@@ -9,9 +9,7 @@ import * as ImagePicker from "expo-image-picker";
 import { identifyEquipment, getQuickExercises } from "../services/geminiService";
 import { C, T, R, E } from "../theme";
 import { Press, GhostButton, IconBadge } from "../ui/kit";
-
-const CAT_COLORS = { cardio: C.blue, force: C.red, poids_libre: C.amber, accessoire: C.green };
-const CAT_ICONS = { cardio: "heart", force: "activity", poids_libre: "disc", accessoire: "circle" };
+import { categoryOf } from "../ui/categories";
 
 export default function QuickScanScreen() {
   const [photo, setPhoto] = useState(null);
@@ -63,99 +61,81 @@ export default function QuickScanScreen() {
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>SCAN RAPIDE</Text>
-            <Text style={styles.title}>EXERCICES{"\n"}SUGGÉRÉS</Text>
-          </View>
-          <IconBadge name="maximize" size={46} />
-        </View>
+        <Text style={styles.eyebrow}>SCAN RAPIDE</Text>
+        <Text style={styles.title}>EXERCICES SUGGÉRÉS</Text>
+        <Text style={styles.subtitle}>Un appareil, des exercices immédiatement.</Text>
 
-        <View style={styles.body}>
-          <Text style={styles.subtitle}>Scanne un appareil et obtiens des exercices immédiatement.</Text>
-
-          {/* Photo */}
-          {photo ? (
-            <View style={styles.photoWrap}>
-              <Image source={{ uri: photo }} style={styles.photo} />
-              {scanning && (
-                <View style={styles.overlay}>
-                  <ActivityIndicator color={C.accent} size="large" />
-                  <Text style={styles.overlayText}>Analyse en cours…</Text>
-                </View>
-              )}
+        <Press style={styles.photoCard} onPress={() => pickImage(true)} disabled={scanning} scaleTo={0.99}>
+          {photo ? <Image source={{ uri: photo }} style={styles.photo} /> : null}
+          {photo && scanning ? <View style={styles.shade} /> : null}
+          {scanning ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={C.accent} size="large" />
+              <Text style={styles.scanningText}>Analyse en cours…</Text>
             </View>
-          ) : (
-            <Press style={styles.placeholder} onPress={() => pickImage(true)} disabled={scanning} scaleTo={0.98}>
-              <IconBadge name="camera" size={52} />
+          ) : !photo ? (
+            <View style={styles.center}>
+              <IconBadge name="camera" size={48} />
               <Text style={styles.placeholderText}>Prends une photo d'un appareil</Text>
-            </Press>
-          )}
+            </View>
+          ) : null}
+        </Press>
 
-          <GhostButton
-            label="CHOISIR DEPUIS LA GALERIE"
-            icon="image"
-            onPress={() => pickImage(false)}
-            style={styles.galleryBtn}
-          />
-        </View>
+        <GhostButton
+          label="CHOISIR DEPUIS LA GALERIE"
+          icon="image"
+          onPress={() => !scanning && pickImage(false)}
+          style={styles.galleryBtn}
+        />
 
-        {/* Résultats */}
-        {results.map((item, idx) => (
-          <View key={idx} style={styles.equipBlock}>
-            <View style={styles.equipHeader}>
-              <View style={[styles.equipIconBox, { borderColor: CAT_COLORS[item.category] || C.border }]}>
-                <Feather
-                  name={CAT_ICONS[item.category] || "box"}
-                  size={17}
-                  color={CAT_COLORS[item.category] || C.textSecondary}
-                />
+        {results.map((item, idx) => {
+          const cat = categoryOf(item.category);
+          return (
+            <View key={idx} style={styles.equipBlock}>
+              <View style={styles.equipHeader}>
+                <IconBadge name={cat.icon} family="mci" size={36} color={cat.color} />
+                <Text style={styles.equipName} numberOfLines={1}>{item.name.toUpperCase()}</Text>
               </View>
-              <Text style={styles.equipName} numberOfLines={1}>{item.name.toUpperCase()}</Text>
-            </View>
 
-            <View style={styles.exList}>
-              {item.exercises.map((ex, i) => (
-                <View key={i} style={styles.exRow}>
-                  <Text style={styles.exNum}>{String(i + 1).padStart(2, "0")}</Text>
-                  <View style={styles.exInfo}>
-                    <Text style={styles.exName}>{ex.name.toUpperCase()}</Text>
-                    <View style={styles.exMetaRow}>
-                      <View style={styles.metaPill}>
-                        <Text style={styles.metaPillText}>{ex.sets} × {ex.reps}</Text>
-                      </View>
-                      {ex.muscles?.length > 0 && (
-                        <Text style={styles.exMuscles} numberOfLines={1}>{ex.muscles.join(" · ")}</Text>
-                      )}
+              <View style={{ gap: 8 }}>
+                {item.exercises.map((ex, i) => (
+                  <View key={i} style={styles.exCard}>
+                    <View style={styles.indexBox}>
+                      <Text style={styles.indexText}>{String(i + 1).padStart(2, "0")}</Text>
                     </View>
-                    {ex.tips && (
-                      <View style={styles.tipRow}>
-                        <Feather name="info" size={11} color={C.textMuted} />
-                        <Text style={styles.exTips}>{ex.tips}</Text>
+                    <View style={styles.exInfo}>
+                      <Text style={styles.exName}>{ex.name.toUpperCase()}</Text>
+                      <View style={styles.chips}>
+                        <View style={styles.pill}>
+                          <Text style={styles.pillText}>{ex.sets} × {ex.reps}</Text>
+                        </View>
+                        {ex.muscles?.slice(0, 2).map((m, j) => (
+                          <View key={j} style={styles.chip}>
+                            <Text style={styles.chipText}>{m}</Text>
+                          </View>
+                        ))}
                       </View>
-                    )}
+                      {ex.tips ? <Text style={styles.exTips}>{ex.tips}</Text> : null}
+                    </View>
+                    {ex.youtubeQuery ? (
+                      <Press
+                        style={styles.videoBtn}
+                        onPress={() => Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.youtubeQuery)}`)}
+                        scaleTo={0.88}
+                      >
+                        <Feather name="play" size={13} color="#fff" />
+                      </Press>
+                    ) : null}
                   </View>
-                  {ex.youtubeQuery && (
-                    <Press
-                      style={styles.videoBtn}
-                      onPress={() => Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.youtubeQuery)}`)}
-                      scaleTo={0.88}
-                    >
-                      <Feather name="play" size={13} color="#fff" />
-                    </Press>
-                  )}
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
 
         {photo && !scanning && results.length > 0 && (
-          <View style={styles.body}>
-            <GhostButton label="NOUVELLE PHOTO" icon="refresh-cw" onPress={reset} />
-          </View>
+          <GhostButton label="NOUVELLE PHOTO" icon="refresh-cw" onPress={reset} style={{ marginTop: 24 }} />
         )}
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -163,74 +143,53 @@ export default function QuickScanScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  container: { paddingBottom: 40 },
+  container: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
 
-  header: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20 },
-  eyebrow: { ...T.label, color: C.accent, marginBottom: 4 },
-  title: { fontFamily: "BebasNeue_400Regular", fontSize: 46, color: C.textPrimary, letterSpacing: 2, lineHeight: 46 },
+  eyebrow: { ...T.label, color: C.accent, marginBottom: 2 },
+  title: { fontFamily: "BebasNeue_400Regular", fontSize: 44, color: C.textPrimary, letterSpacing: 1.5, lineHeight: 46 },
+  subtitle: { ...T.body, fontSize: 14, marginBottom: 18 },
 
-  body: { paddingHorizontal: 24 },
-  subtitle: { ...T.body, marginBottom: 20 },
-
-  placeholder: {
-    height: 170, alignItems: "center", justifyContent: "center", gap: 12,
-    backgroundColor: C.surface, borderRadius: R.lg,
-    borderWidth: 1, borderColor: C.border, borderStyle: "dashed",
+  photoCard: {
+    height: 170, borderRadius: R.lg, overflow: "hidden",
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center",
   },
-  placeholderText: { ...T.body, color: C.textMuted },
+  photo: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  shade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,10,10,0.7)" },
+  center: { alignItems: "center", gap: 12 },
+  scanningText: { fontFamily: "DMSans_600SemiBold", fontSize: 14, color: C.accent },
+  placeholderText: { ...T.body, fontSize: 14, color: C.textMuted },
 
-  photoWrap: { position: "relative", borderRadius: R.lg, overflow: "hidden", borderWidth: 1, borderColor: C.border },
-  photo: { width: "100%", height: 210 },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
-    alignItems: "center", justifyContent: "center", gap: 12,
-  },
-  overlayText: { fontFamily: "DMSans_600SemiBold", fontSize: 14, color: C.accent },
+  galleryBtn: { marginTop: 10, paddingVertical: 14 },
 
-  galleryBtn: { marginTop: 12, paddingVertical: 15 },
+  equipBlock: { marginTop: 24 },
+  equipHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
+  equipName: { flex: 1, fontFamily: "BebasNeue_400Regular", fontSize: 26, color: C.textPrimary, letterSpacing: 0.5 },
 
-  equipBlock: {
-    marginHorizontal: 24, marginTop: 20,
+  exCard: {
+    flexDirection: "row", alignItems: "flex-start", gap: 12,
     backgroundColor: C.surface, borderRadius: R.lg,
     borderWidth: 1, borderColor: C.border,
-    overflow: "hidden",
+    padding: 14,
     ...E.raised,
   },
-  equipHeader: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: C.surface2,
-  },
-  equipIconBox: {
-    width: 36, height: 36, borderRadius: R.sm,
+  indexBox: {
+    width: 32, height: 32, borderRadius: R.xs,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, backgroundColor: C.bg,
+    backgroundColor: C.accentSoft,
   },
-  equipName: { flex: 1, fontFamily: "BebasNeue_400Regular", fontSize: 22, color: C.textPrimary, letterSpacing: 1 },
-
-  exList: { paddingHorizontal: 16 },
-  exRow: {
-    flexDirection: "row", alignItems: "flex-start", gap: 12,
-    paddingVertical: 14,
-    borderTopWidth: 1, borderColor: C.border,
-  },
-  exNum: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.textMuted, lineHeight: 26, width: 28 },
+  indexText: { fontFamily: "BebasNeue_400Regular", fontSize: 18, color: C.accent },
   exInfo: { flex: 1, gap: 6 },
   exName: { fontFamily: "BebasNeue_400Regular", fontSize: 19, color: C.textPrimary, lineHeight: 21 },
-  exMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  metaPill: {
-    backgroundColor: C.accentSoft, borderRadius: R.pill,
-    paddingHorizontal: 9, paddingVertical: 3,
-  },
-  metaPillText: { fontFamily: "DMSans_600SemiBold", fontSize: 10, color: C.accent, letterSpacing: 0.5 },
-  exMuscles: { ...T.small, fontSize: 11, color: C.textMuted, flex: 1 },
-  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
-  exTips: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 12, fontStyle: "italic", color: C.textSecondary, lineHeight: 17 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  pill: { backgroundColor: C.accentSoft, borderRadius: R.pill, paddingHorizontal: 9, paddingVertical: 3 },
+  pillText: { fontFamily: "DMSans_700Bold", fontSize: 11, color: C.accent },
+  chip: { backgroundColor: C.surface2, borderRadius: R.pill, paddingHorizontal: 9, paddingVertical: 3 },
+  chipText: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textSecondary },
+  exTips: { fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textSecondary, lineHeight: 17 },
 
   videoBtn: {
-    width: 34, height: 34, borderRadius: R.pill,
+    width: 34, height: 34, borderRadius: R.xs,
     backgroundColor: "#FF0000", alignItems: "center", justifyContent: "center",
-    marginTop: 2,
   },
 });

@@ -2,20 +2,58 @@ import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, FlatList, StatusBar, Animated, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { getSessions, deleteSession, sessionMinutes } from "../data/storage";
+import { streakDays, weekSessions } from "../data/stats";
 import { C, T, R, E } from "../theme";
-import { Press, PrimaryButton, SectionLabel, IconBadge } from "../ui/kit";
+import { Press, PrimaryButton, IconBadge, Ring } from "../ui/kit";
+
+// Objectif hebdomadaire de la carte « Série en cours » : la maquette montre
+// 4 séances faites et « encore 1 », soit 5 par semaine.
+const WEEKLY_GOAL = 5;
 
 const GOAL_LABELS = { force: "FORCE", cardio: "CARDIO", mixte: "MIXTE" };
 const LEVEL_LABELS = { debutant: "DÉBUTANT", intermediaire: "INTER", avance: "AVANCÉ" };
+const INK = C.bg;
+const INK_SOFT = "rgba(10,10,10,0.2)";
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).toUpperCase();
 }
 
+function StreakCard({ sessions }) {
+  const streak = streakDays(sessions);
+  const week = weekSessions(sessions);
+  const trainedDays = Array(7).fill(false);
+  week.forEach((s) => { trainedDays[(new Date(s.date).getDay() + 6) % 7] = true; });
+  const remaining = Math.max(0, WEEKLY_GOAL - week.length);
+
+  return (
+    <View style={styles.hero}>
+      <View style={styles.heroTop}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.heroEyebrow}>SÉRIE EN COURS</Text>
+          <Text style={styles.heroValue}>{streak} JOUR{streak > 1 ? "S" : ""}</Text>
+          <Text style={styles.heroSub}>
+            {remaining === 0
+              ? "Objectif de la semaine atteint"
+              : `Encore ${remaining} séance${remaining > 1 ? "s" : ""} cette semaine`}
+          </Text>
+        </View>
+        <Ring size={54} stroke={5} value={week.length / WEEKLY_GOAL} color={INK} trackColor={INK_SOFT} />
+      </View>
+      <View style={styles.segments}>
+        {trainedDays.map((on, i) => (
+          <View key={i} style={[styles.segment, { backgroundColor: on ? INK : INK_SOFT }]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function SessionCard({ item, onPress, onDelete }) {
   const [deleteMode, setDeleteMode] = useState(false);
+  const [height, setHeight] = useState(null);
   const anim = useRef(new Animated.Value(0)).current;
 
   const showDelete = () => {
@@ -31,32 +69,31 @@ function SessionCard({ item, onPress, onDelete }) {
   return (
     <Animated.View style={[styles.cardWrap, { backgroundColor: bgColor }]}>
       {!deleteMode ? (
-        <Press style={styles.cardContent} onPress={onPress} onLongPress={showDelete} delayLongPress={400} scaleTo={0.985}>
-          <View style={styles.cardTop}>
-            <Text style={styles.cardDate}>{formatDate(item.date)}</Text>
-            <View style={styles.cardTags}>
-              <View style={styles.tag}><Text style={styles.tagText}>{GOAL_LABELS[item.goal]}</Text></View>
-              <View style={[styles.tag, styles.tagMuted]}>
-                <Text style={[styles.tagText, { color: C.textSecondary }]}>{LEVEL_LABELS[item.level]}</Text>
+        <View onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+          <Press style={styles.cardContent} onPress={onPress} onLongPress={showDelete} delayLongPress={400} scaleTo={0.985}>
+            <View style={styles.cardTop}>
+              <Text style={styles.cardDate}>{formatDate(item.date)}</Text>
+              <View style={styles.cardTags}>
+                <View style={styles.tag}><Text style={styles.tagText}>{GOAL_LABELS[item.goal]}</Text></View>
+                <View style={[styles.tag, styles.tagMuted]}>
+                  <Text style={[styles.tagText, { color: C.textSecondary }]}>{LEVEL_LABELS[item.level]}</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.workout?.title?.toUpperCase()}</Text>
+            <Text style={styles.cardTitle} numberOfLines={2}>{item.workout?.title?.toUpperCase()}</Text>
 
-          <View style={styles.cardMeta}>
-            <Feather name="clock" size={12} color={C.textMuted} />
-            <Text style={styles.cardMetaText}>{sessionMinutes(item)} MIN</Text>
-            <View style={styles.metaDot} />
-            <Feather name="list" size={12} color={C.textMuted} />
-            <Text style={styles.cardMetaText}>{item.workout?.exercises?.length} EX.</Text>
-            <View style={styles.metaDot} />
-            <Feather name="box" size={12} color={C.textMuted} />
-            <Text style={styles.cardMetaText}>{item.equipments?.length}</Text>
-          </View>
-        </Press>
+            <View style={styles.cardMeta}>
+              <Feather name="clock" size={13} color={C.accent} />
+              <Text style={styles.cardMetaText}>{sessionMinutes(item)} min</Text>
+              <MaterialCommunityIcons name="dumbbell" size={14} color={C.accent} style={{ marginLeft: 10 }} />
+              <Text style={styles.cardMetaText}>{item.workout?.exercises?.length ?? 0} exercices</Text>
+            </View>
+          </Press>
+        </View>
       ) : (
-        <View style={styles.deleteRow}>
+        // Même hauteur que la carte : la liste ne saute pas en passant en mode suppression.
+        <View style={[styles.deleteRow, height && { height }]}>
           <TouchableOpacity style={styles.cancelZone} onPress={hideDelete} activeOpacity={1} onLongPress={hideDelete} delayLongPress={400} />
           <Press style={styles.deleteBtnInner} onPress={() => { hideDelete(); onDelete(item.id); }}>
             <Feather name="trash-2" size={15} color="#fff" />
@@ -83,54 +120,53 @@ export default function HomeScreen() {
     deleteSession(id);
   };
 
-  const weekCount = sessions.filter((s) => (Date.now() - new Date(s.date)) / 864e5 <= 7).length;
+  const greeting = new Date().getHours() < 18 ? "Salut" : "Bonsoir";
+
+  const header = (
+    <>
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.greeting}>{greeting}</Text>
+          <Text style={styles.headerTitle}>FITSCAN</Text>
+        </View>
+        <IconBadge name="user" size={44} />
+      </View>
+
+      <StreakCard sessions={sessions} />
+
+      <View style={styles.listHeader}>
+        <Text style={styles.listLabel}>HISTORIQUE</Text>
+        <Text style={styles.listCount}>
+          {sessions.length} séance{sessions.length > 1 ? "s" : ""}
+        </Text>
+      </View>
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
 
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerLabel}>MES ENTRAÎNEMENTS</Text>
-          <Text style={styles.headerTitle}>FITSCAN</Text>
-        </View>
-        <IconBadge name="zap" size={46} />
-      </View>
-
-      {sessions.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>AUCUNE{"\n"}SÉANCE</Text>
-          <Text style={styles.emptyBody}>Lance ton premier entraînement en scannant ton équipement.</Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.streak}>
-            <Text style={styles.streakValue}>{weekCount}</Text>
-            <Text style={styles.streakLabel}>séance{weekCount > 1 ? "s" : ""} cette semaine</Text>
+      <FlatList
+        data={sessions}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>AUCUNE SÉANCE</Text>
+            <Text style={styles.emptyBody}>Lance ton premier entraînement en scannant ton équipement.</Text>
           </View>
-
-          <View style={styles.listHeader}>
-            <SectionLabel style={{ marginBottom: 0 }}>
-              {sessions.length} SÉANCE{sessions.length > 1 ? "S" : ""}
-            </SectionLabel>
-            <Text style={styles.listHint}>maintenir pour supprimer</Text>
-          </View>
-
-          <FlatList
-            data={sessions}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <SessionCard
-                item={item}
-                onPress={() => navigation.navigate("Workout", { workout: item.workout, readOnly: true })}
-                onDelete={handleDelete}
-              />
-            )}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
+        }
+        renderItem={({ item }) => (
+          <SessionCard
+            item={item}
+            onPress={() => navigation.navigate("Workout", { workout: item.workout, readOnly: true })}
+            onDelete={handleDelete}
           />
-        </>
-      )}
+        )}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+      />
 
       <View style={styles.fabWrap}>
         <PrimaryButton label="NOUVELLE SÉANCE" icon="plus" onPress={() => navigation.navigate("NewSession")} />
@@ -141,40 +177,42 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-
-  header: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20 },
-  headerLabel: { ...T.label, color: C.accent, marginBottom: 4 },
-  headerTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 56, color: C.textPrimary, letterSpacing: 3, lineHeight: 56 },
-
-  streak: {
-    flexDirection: "row", alignItems: "baseline", gap: 10,
-    marginHorizontal: 24, marginBottom: 8,
-    backgroundColor: C.accentSofter, borderRadius: R.md,
-    borderWidth: 1, borderColor: "rgba(200,255,0,0.18)",
-    paddingHorizontal: 16, paddingVertical: 14,
-  },
-  streakValue: { fontFamily: "BebasNeue_400Regular", fontSize: 30, color: C.accent, lineHeight: 32 },
-  streakLabel: { ...T.body, fontSize: 14, color: C.textPrimary },
-
-  listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingVertical: 16 },
-  listHint: { ...T.small, color: C.textMuted, fontStyle: "italic" },
-
   list: { paddingHorizontal: 20, paddingBottom: 130, gap: 12 },
+
+  header: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 4, paddingTop: 20, paddingBottom: 18 },
+  greeting: { fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, marginBottom: 2 },
+  headerTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 50, color: C.textPrimary, letterSpacing: 2, lineHeight: 52 },
+
+  hero: {
+    backgroundColor: C.accent, borderRadius: R.lg,
+    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 20,
+    marginBottom: 12,
+    ...E.accentGlow,
+  },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  heroEyebrow: { ...T.label, fontSize: 10, color: "rgba(10,10,10,0.6)", marginBottom: 2 },
+  heroValue: { fontFamily: "BebasNeue_400Regular", fontSize: 46, color: INK, letterSpacing: 1, lineHeight: 48 },
+  heroSub: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: "rgba(10,10,10,0.75)" },
+  segments: { flexDirection: "row", gap: 6, marginTop: 16 },
+  segment: { flex: 1, height: 4, borderRadius: R.pill },
+
+  listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 4, paddingTop: 16, paddingBottom: 4 },
+  listLabel: { ...T.label, color: C.textPrimary },
+  listCount: { ...T.small, color: C.textSecondary },
 
   cardWrap: { borderRadius: R.lg, borderWidth: 1, borderColor: C.border, overflow: "hidden", ...E.raised },
   cardContent: { paddingHorizontal: 18, paddingVertical: 16, gap: 10 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardDate: { ...T.label, color: C.textMuted },
+  cardDate: { ...T.label, fontSize: 10, color: C.textMuted },
   cardTags: { flexDirection: "row", gap: 6 },
-  tag: { backgroundColor: C.accentSoft, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  tag: { backgroundColor: C.accentSoft, borderRadius: R.pill, paddingHorizontal: 9, paddingVertical: 3 },
   tagMuted: { backgroundColor: C.surface2 },
   tagText: { ...T.label, fontSize: 9, color: C.accent, letterSpacing: 1.2 },
   cardTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.textPrimary, letterSpacing: 0.5, lineHeight: 26 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
-  cardMetaText: { ...T.label, fontSize: 10, color: C.textSecondary, marginRight: 2 },
-  metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: C.textMuted, marginHorizontal: 2 },
+  cardMetaText: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary },
 
-  deleteRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingRight: 16, height: 116 },
+  deleteRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingRight: 16, minHeight: 110 },
   cancelZone: { flex: 1, height: "100%" },
   deleteBtnInner: {
     flexDirection: "row", alignItems: "center", gap: 8,
@@ -183,9 +221,9 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: { fontFamily: "BebasNeue_400Regular", fontSize: 18, color: "#fff", letterSpacing: 1.5 },
 
-  empty: { flex: 1, paddingHorizontal: 24, paddingTop: 60 },
-  emptyTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 64, color: C.textPrimary, letterSpacing: 2, lineHeight: 64, marginBottom: 16 },
-  emptyBody: { ...T.body, maxWidth: 260 },
+  empty: { paddingHorizontal: 4, paddingTop: 24 },
+  emptyTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 36, color: C.textPrimary, letterSpacing: 1.5, marginBottom: 8 },
+  emptyBody: { ...T.body, maxWidth: 280 },
 
-  fabWrap: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 28, paddingTop: 20, backgroundColor: C.bg },
+  fabWrap: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: 20, paddingTop: 14, backgroundColor: C.bg },
 });

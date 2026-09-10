@@ -1,15 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Vibration, Animated, Easing } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import { C, T, R, E } from "../theme";
-import { Press, Ring } from "../ui/kit";
+import { Press, PrimaryButton, Ring } from "../ui/kit";
 
-const SIZE = 224;
-const STROKE = 10;
-
-/* Chrono de repos — plein écran, anneau de progression sans dépendance SVG.
-   Monté dans un Modal depuis WorkoutScreen : <RestTimerScreen seconds={60} onClose={…} /> */
-export default function RestTimerScreen({ seconds = 60, onClose }) {
+/* Chrono de repos, monté dans un Modal depuis WorkoutScreen.
+   setNumber / totalSets / exerciseName alimentent la ligne de contexte. */
+export default function RestTimerScreen({ seconds = 60, onClose, setNumber, totalSets, exerciseName }) {
   const [remaining, setRemaining] = useState(seconds);
   const pulse = useRef(new Animated.Value(1)).current;
   const enter = useRef(new Animated.Value(0)).current;
@@ -31,81 +27,72 @@ export default function RestTimerScreen({ seconds = 60, onClose }) {
       hasBuzzed.current = false;
     }
     Animated.sequence([
-      Animated.timing(pulse, { toValue: 1.06, duration: 120, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1.05, duration: 120, useNativeDriver: true }),
       Animated.timing(pulse, { toValue: 1, duration: 260, useNativeDriver: true }),
     ]).start();
   }, [remaining]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = remaining === 0;
   const ratio = seconds > 0 ? remaining / seconds : 0;
-  const color = ratio > 0.5 ? C.accent : ratio > 0.2 ? C.amber : C.red;
-
-  const add = (s) => setRemaining((r) => Math.max(0, r + s));
-
-  const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
-  const ss = String(remaining % 60).padStart(2, "0");
+  const color = ratio > 0.2 || done ? C.accent : C.amber;
 
   return (
     <Animated.View style={[styles.overlay, { opacity: enter }]}>
-      <Text style={styles.label}>TEMPS DE REPOS</Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>TEMPS DE REPOS</Text>
 
-      <Animated.View style={{ transform: [{ scale: pulse }] }}>
-        <Ring size={SIZE} stroke={STROKE} value={1 - ratio} color={color}>
-          <View style={styles.ringInner}>
-            <Text style={[styles.count, { color: done ? C.accent : C.textPrimary }]}>{mm}:{ss}</Text>
-            <Text style={styles.unit}>{done ? "prêt" : "restantes"}</Text>
-          </View>
-        </Ring>
-      </Animated.View>
+        <Animated.View style={{ transform: [{ scale: pulse }] }}>
+          <Ring size={196} stroke={10} value={ratio} color={color} trackColor={C.surface2}>
+            <Text style={styles.count}>{remaining}</Text>
+            <Text style={styles.unit}>{done ? "c'est reparti" : "secondes"}</Text>
+          </Ring>
+        </Animated.View>
 
-      <View style={styles.adjustRow}>
-        <Press style={styles.adjustBtn} onPress={() => add(-15)} scaleTo={0.92}>
-          <Feather name="minus" size={15} color={C.textPrimary} />
-          <Text style={styles.adjustText}>15s</Text>
-        </Press>
-        <Press style={styles.adjustBtn} onPress={() => add(30)} scaleTo={0.92}>
-          <Feather name="plus" size={15} color={C.textPrimary} />
-          <Text style={styles.adjustText}>30s</Text>
-        </Press>
+        {setNumber && totalSets ? (
+          <Text style={styles.context} numberOfLines={1}>
+            Série {setNumber} sur {totalSets}{exerciseName ? ` · ${exerciseName}` : ""}
+          </Text>
+        ) : null}
+
+        <View style={styles.actions}>
+          <Press style={styles.addBtn} onPress={() => setRemaining((r) => r + 30)} scaleTo={0.92}>
+            <Text style={styles.addText}>+30s</Text>
+          </Press>
+          <PrimaryButton
+            label={done ? "C'EST PARTI" : "PASSER"}
+            onPress={onClose}
+            style={styles.skipBtn}
+          />
+        </View>
       </View>
-
-      <Press style={[styles.cta, done && styles.ctaDone]} onPress={onClose} scaleTo={0.97}>
-        <Feather name={done ? "play" : "skip-forward"} size={16} color={done ? C.bg : C.textPrimary} />
-        <Text style={[styles.ctaText, done && { color: C.bg }]}>
-          {done ? "C'EST PARTI" : "PASSER LE REPOS"}
-        </Text>
-      </Press>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
-    backgroundColor: "rgba(10,10,10,0.97)",
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 32,
+    flex: 1, backgroundColor: "rgba(10,10,10,0.92)",
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 24,
   },
-  label: { ...T.label, color: C.accent, marginBottom: 32 },
-
-  ringInner: { alignItems: "center" },
-  count: { fontFamily: "BebasNeue_400Regular", fontSize: 72, lineHeight: 74, letterSpacing: 2 },
-  unit: { ...T.label, fontSize: 10, color: C.textMuted, marginTop: 2 },
-
-  adjustRow: { flexDirection: "row", gap: 12, marginTop: 36 },
-  adjustBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: C.surface, borderRadius: R.pill,
+  card: {
+    width: "100%", maxWidth: 360, alignItems: "center",
+    backgroundColor: C.surface, borderRadius: R.lg,
     borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 18, paddingVertical: 11,
+    paddingHorizontal: 20, paddingTop: 24, paddingBottom: 20,
+    ...E.floating,
   },
-  adjustText: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: C.textPrimary },
+  label: { ...T.label, fontSize: 10, marginBottom: 20 },
 
-  cta: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    marginTop: 28, width: "100%", maxWidth: 320,
-    paddingVertical: 17, borderRadius: R.md,
-    backgroundColor: C.surface, borderWidth: 1, borderColor: C.borderHi,
+  count: { fontFamily: "BebasNeue_400Regular", fontSize: 76, color: C.textPrimary, lineHeight: 78 },
+  unit: { ...T.small, fontSize: 11, color: C.textMuted, marginTop: -4 },
+
+  context: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary, marginTop: 20 },
+
+  actions: { flexDirection: "row", alignSelf: "stretch", gap: 10, marginTop: 22 },
+  addBtn: {
+    paddingHorizontal: 20, justifyContent: "center",
+    borderRadius: R.md, borderWidth: 1, borderColor: C.borderHi,
   },
-  ctaDone: { backgroundColor: C.accent, borderColor: C.accent, ...E.accentGlow },
-  ctaText: { fontFamily: "DMSans_700Bold", fontSize: 14, letterSpacing: 1.5, color: C.textPrimary },
+  addText: { fontFamily: "DMSans_700Bold", fontSize: 14, color: C.textPrimary },
+  skipBtn: { flex: 1, paddingVertical: 16 },
 });

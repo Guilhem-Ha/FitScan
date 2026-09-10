@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { View, Text, Pressable, Animated, StyleSheet } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { C, T, R, E, S } from "../theme";
 
 /* Le Pressable enveloppe la vue animée : les propriétés qui positionnent le bouton
@@ -89,33 +89,37 @@ export function SectionLabel({ children, accent, style }) {
   );
 }
 
-/* Icône cerclée — remplace les emojis */
-export function IconBadge({ name, tone = "accent", size = 44 }) {
-  const tinted = tone === "accent";
+/* Icône dans un carré teinté — remplace les emojis.
+   tone "accent" teinte en lime, tout autre ton reste neutre ; `color` impose une
+   teinte (catégories d'équipement). `family="mci"` pour les pictos absents de
+   Feather, comme l'haltère ou le trophée. */
+export function IconBadge({ name, tone = "accent", size = 44, color, family = "feather" }) {
+  const tint = color || (tone === "accent" ? C.accent : null);
+  const Icon = family === "mci" ? MaterialCommunityIcons : Feather;
   return (
     <View
       style={[
         kitStyles.iconBadge,
         { width: size, height: size, borderRadius: size / 3 },
-        tinted
-          ? { backgroundColor: C.accentSoft, borderColor: "rgba(200,255,0,0.25)" }
+        tint
+          ? { backgroundColor: tint + "22", borderColor: tint + "40" }
           : { backgroundColor: C.surface2, borderColor: C.border },
       ]}
     >
-      <Feather name={name} size={size * 0.42} color={tinted ? C.accent : C.textPrimary} />
+      <Icon name={name} size={size * 0.46} color={tint || C.textPrimary} />
     </View>
   );
 }
 
 /* Barre de progression arrondie animée */
-export function ProgressBar({ value = 0, height = 6, color = C.accent }) {
+export function ProgressBar({ value = 0, height = 6, color = C.accent, trackColor = C.border }) {
   const w = useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
     Animated.timing(w, { toValue: value, duration: 550, useNativeDriver: false }).start();
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const width = w.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
   return (
-    <View style={{ height, borderRadius: R.pill, backgroundColor: C.border, overflow: "hidden" }}>
+    <View style={{ height, borderRadius: R.pill, backgroundColor: trackColor, overflow: "hidden" }}>
       <Animated.View style={{ width, height: "100%", borderRadius: R.pill, backgroundColor: color }} />
     </View>
   );
@@ -124,7 +128,7 @@ export function ProgressBar({ value = 0, height = 6, color = C.accent }) {
 /* Anneau de progression (chrono de repos, complétion de séance) — sans dépendance SVG.
    Deux demi-anneaux pivotants, chacun clippé dans sa moitié : la portion visible
    croît de 0 à 180° par moitié, ce qui donne un arc réellement proportionnel. */
-export function Ring({ size = 180, stroke = 8, value = 0, color = C.accent, children }) {
+export function Ring({ size = 180, stroke = 8, value = 0, color = C.accent, trackColor = C.border, children }) {
   const half = size / 2;
   const deg = Math.max(0, Math.min(1, value)) * 360;
 
@@ -150,7 +154,7 @@ export function Ring({ size = 180, stroke = 8, value = 0, color = C.accent, chil
       <View
         style={[
           StyleSheet.absoluteFill,
-          { borderRadius: half, borderWidth: stroke, borderColor: C.border },
+          { borderRadius: half, borderWidth: stroke, borderColor: trackColor },
         ]}
       />
       <HalfRing side="right" rotate={Math.min(deg, 180) - 180} />
@@ -160,11 +164,51 @@ export function Ring({ size = 180, stroke = 8, value = 0, color = C.accent, chil
   );
 }
 
+export function BackButton({ onPress }) {
+  return (
+    <Press style={kitStyles.backSquare} onPress={onPress} scaleTo={0.9}>
+      <Feather name="chevron-left" size={18} color={C.textPrimary} />
+    </Press>
+  );
+}
+
+/* En-tête du parcours de création : retour, avancement, étape courante. */
+export function StepHeader({ step, total = 3, onBack }) {
+  return (
+    <View style={kitStyles.stepRow}>
+      <BackButton onPress={onBack} />
+      <View style={{ flex: 1 }}>
+        <ProgressBar value={step / total} height={4} />
+      </View>
+      <Text style={kitStyles.stepText}>{step}/{total}</Text>
+    </View>
+  );
+}
+
+/* Barre d'action fixée en bas d'écran, au-dessus du contenu qui défile. */
+export function FooterBar({ children }) {
+  return <View style={kitStyles.footer}>{children}</View>;
+}
+
 const kitStyles = StyleSheet.create({
   btnRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   sectionRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
   tick: { width: 3, height: 12, borderRadius: 2, backgroundColor: C.textMuted },
   iconBadge: { alignItems: "center", justifyContent: "center", borderWidth: 1 },
+
+  backSquare: {
+    width: 40, height: 40, borderRadius: R.sm,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+  },
+  stepRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 20 },
+  stepText: { fontFamily: "DMSans_600SemiBold", fontSize: 12, color: C.textSecondary },
+
+  footer: {
+    position: "absolute", left: 0, right: 0, bottom: 0,
+    paddingHorizontal: 24, paddingTop: 14, paddingBottom: 24,
+    backgroundColor: C.bg, borderTopWidth: 1, borderColor: C.border,
+  },
 });
 
 export { E, R };
