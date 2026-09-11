@@ -150,6 +150,7 @@ export default function ScanScreen({ navigation, route }) {
                     style={styles.removeBtn}
                     onPress={() => setEquipments((prev) => prev.filter((_, j) => j !== i))}
                     scaleTo={0.85}
+                    accessibilityLabel={`Retirer ${eq.name}`}
                   >
                     <Feather name="x" size={16} color={C.textMuted} />
                   </Press>

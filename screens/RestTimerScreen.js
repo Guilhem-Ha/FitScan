@@ -6,16 +6,21 @@ import { Press, PrimaryButton, Ring } from "../ui/kit";
 /* Chrono de repos, monté dans un Modal depuis WorkoutScreen.
    setNumber / totalSets / exerciseName alimentent la ligne de contexte. */
 export default function RestTimerScreen({ seconds = 60, onClose, setNumber, totalSets, exerciseName }) {
-  const [remaining, setRemaining] = useState(seconds);
+  /* Le temps restant se déduit d'une échéance absolue. Un compteur décrémenté à
+     chaque tic prend du retard dès que l'app passe en arrière-plan ou que l'écran
+     se verrouille : au retour, le repos afficherait plus de temps qu'il n'en reste. */
+  const [endAt, setEndAt] = useState(() => Date.now() + seconds * 1000);
+  const [total, setTotal] = useState(seconds);
+  const [now, setNow] = useState(() => Date.now());
   const pulse = useRef(new Animated.Value(1)).current;
   const enter = useRef(new Animated.Value(0)).current;
   const hasBuzzed = useRef(false);
+  const remaining = Math.max(0, Math.ceil((endAt - now) / 1000));
 
-  /* Le tic tourne jusqu'au démontage : s'il s'arrêtait à zéro, un « +30s »
-     après la fin laisserait le compteur figé. */
   useEffect(() => {
     Animated.timing(enter, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    const id = setInterval(() => setRemaining((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
+    // Le tic tourne jusqu'au démontage : « +30s » après la fin doit repartir.
+    const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -33,7 +38,7 @@ export default function RestTimerScreen({ seconds = 60, onClose, setNumber, tota
   }, [remaining]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = remaining === 0;
-  const ratio = seconds > 0 ? remaining / seconds : 0;
+  const ratio = total > 0 ? remaining / total : 0;
   const color = ratio > 0.2 || done ? C.accent : C.amber;
 
   return (
@@ -55,7 +60,7 @@ export default function RestTimerScreen({ seconds = 60, onClose, setNumber, tota
         ) : null}
 
         <View style={styles.actions}>
-          <Press style={styles.addBtn} onPress={() => setRemaining((r) => r + 30)} scaleTo={0.92}>
+          <Press style={styles.addBtn} onPress={() => { setEndAt((end) => Math.max(end, Date.now()) + 30000); setTotal((t) => t + 30); }} scaleTo={0.92}>
             <Text style={styles.addText}>+30s</Text>
           </Press>
           <PrimaryButton

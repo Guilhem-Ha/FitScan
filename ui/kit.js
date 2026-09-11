@@ -13,7 +13,7 @@ const OUTER_KEYS = [
 ];
 
 /* Pressable qui s'enfonce légèrement — micro-interaction commune à tous les CTA */
-export function Press({ style, onPress, onLongPress, delayLongPress, children, scaleTo = 0.97, disabled }) {
+export function Press({ style, onPress, onLongPress, delayLongPress, children, scaleTo = 0.97, disabled, accessibilityLabel }) {
   const scale = useRef(new Animated.Value(1)).current;
   const to = (v) =>
     Animated.spring(scale, { toValue: v, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
@@ -34,6 +34,10 @@ export function Press({ style, onPress, onLongPress, delayLongPress, children, s
   return (
     <Pressable
       style={outer}
+      // Les boutons à icône seule n'annoncent rien sans libellé explicite.
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={delayLongPress}
@@ -166,7 +170,7 @@ export function Ring({ size = 180, stroke = 8, value = 0, color = C.accent, trac
 
 export function BackButton({ onPress }) {
   return (
-    <Press style={kitStyles.backSquare} onPress={onPress} scaleTo={0.9}>
+    <Press style={kitStyles.backSquare} onPress={onPress} scaleTo={0.9} accessibilityLabel="Retour">
       <Feather name="chevron-left" size={18} color={C.textPrimary} />
     </Press>
   );

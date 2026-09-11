@@ -124,6 +124,7 @@ export default function QuickScanScreen() {
                         style={styles.videoBtn}
                         onPress={() => Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.youtubeQuery)}`)}
                         scaleTo={0.88}
+                        accessibilityLabel={`Voir ${ex.name} en vidéo`}
                       >
                         <Feather name="play" size={13} color="#fff" />
                       </Press>

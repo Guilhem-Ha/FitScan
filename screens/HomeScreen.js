@@ -125,6 +125,10 @@ export default function HomeScreen({ isActive = true }) {
     }
   };
 
+  /* Deux appuis rapides empilaient deux fois le meme ecran : apres le premier,
+     l'accueil n'a plus le focus et la seconde navigation est ignoree. */
+  const open = (navigate) => { if (navigation.isFocused()) navigate(); };
+
   const greeting = new Date().getHours() < 18 ? "Salut" : "Bonsoir";
   const initial = profile.firstName ? profile.firstName.charAt(0).toUpperCase() : null;
 
@@ -137,7 +141,12 @@ export default function HomeScreen({ isActive = true }) {
           </Text>
           <Text style={styles.headerTitle}>FITSCAN</Text>
         </View>
-        <Press style={styles.profileBtn} onPress={() => navigation.navigate("Profile")} scaleTo={0.9}>
+        <Press
+          style={styles.profileBtn}
+          onPress={() => open(() => navigation.navigate("Profile"))}
+          scaleTo={0.9}
+          accessibilityLabel={profile.firstName ? `Profil de ${profile.firstName}` : "Profil"}
+        >
           {initial
             ? <Text style={styles.profileInitial}>{initial}</Text>
             : <Feather name="user" size={20} color={C.accent} />}
@@ -172,7 +181,7 @@ export default function HomeScreen({ isActive = true }) {
         renderItem={({ item }) => (
           <SessionCard
             item={item}
-            onPress={() => navigation.navigate("Workout", { workout: item.workout, session: item, readOnly: true })}
+            onPress={() => open(() => navigation.navigate("Workout", { workout: item.workout, session: item, readOnly: true }))}
             onDelete={handleDelete}
           />
         )}
@@ -181,7 +190,7 @@ export default function HomeScreen({ isActive = true }) {
       />
 
       <View style={styles.fabWrap}>
-        <PrimaryButton label="NOUVELLE SÉANCE" icon="plus" onPress={() => navigation.navigate("NewSession")} />
+        <PrimaryButton label="NOUVELLE SÉANCE" icon="plus" onPress={() => open(() => navigation.navigate("NewSession"))} />
       </View>
     </SafeAreaView>
   );

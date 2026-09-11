@@ -79,7 +79,12 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight, onSaved }) 
             </Press>
           ))}
         </View>
-        <Press style={[ws.saveBtn, saved && { backgroundColor: C.green }]} onPress={handleSave} scaleTo={0.9}>
+        <Press
+          style={[ws.saveBtn, saved && { backgroundColor: C.green }]}
+          onPress={handleSave}
+          scaleTo={0.9}
+          accessibilityLabel="Enregistrer le poids"
+        >
           <Feather name="check" size={18} color={C.bg} />
         </Press>
       </View>

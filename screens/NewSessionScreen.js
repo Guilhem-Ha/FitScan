@@ -116,9 +116,11 @@ export default function NewSessionScreen({ navigation }) {
         <PrimaryButton
           label="SCANNER MON ÉQUIPEMENT"
           icon="arrow-right"
-          onPress={() =>
-            navigation.navigate("Scan", { sessionName: name || "Ma séance", level, goal, split, duration })
-          }
+          // Deux appuis rapides empilaient deux fois l'ecran de scan.
+          onPress={() => {
+            if (!navigation.isFocused()) return;
+            navigation.navigate("Scan", { sessionName: name || "Ma séance", level, goal, split, duration });
+          }}
         />
       </FooterBar>
     </SafeAreaView>
