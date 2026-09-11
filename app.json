@@ -36,6 +36,7 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": ["./plugins/withOkHttpConnectTimeout"],
     "extra": {
       "eas": {
         "projectId": "513971a8-ef95-4fa5-bcec-381325a06c97"
