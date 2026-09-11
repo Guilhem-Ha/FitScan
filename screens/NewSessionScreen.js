@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TextInput, ScrollView, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getProfile } from "../data/storage";
 import { C, T, R, E } from "../theme";
 import { Press, PrimaryButton, StepHeader, FooterBar } from "../ui/kit";
 
@@ -51,6 +52,14 @@ export default function NewSessionScreen({ navigation }) {
   const [split, setSplit] = useState("full_body");
   const [duration, setDuration] = useState(45);
   const [focused, setFocused] = useState(false);
+
+  // Niveau et objectif partent des préférences du profil ; ils restent modifiables ici.
+  useEffect(() => {
+    getProfile().then((profile) => {
+      setLevel(profile.level);
+      setGoal(profile.goal);
+    });
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>

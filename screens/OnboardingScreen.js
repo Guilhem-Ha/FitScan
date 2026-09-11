@@ -3,10 +3,14 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, Dimensions, StatusBar, Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
+import { DEFAULT_PROFILE, saveProfile } from "../data/storage";
 import { C, T, R } from "../theme";
 import { PrimaryButton } from "../ui/kit";
+import ProfileForm from "../ui/ProfileForm";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const SLIDE_DURATION = 10000;
@@ -45,6 +49,7 @@ const SLIDES = [
 ];
 
 export default function OnboardingScreen({ onDone }) {
+  const [step, setStep] = useState("slides");
   const [current, setCurrent] = useState(0);
   const progresses = useRef(SLIDES.map(() => new Animated.Value(0))).current;
   const pausedRef = useRef(false);
@@ -52,13 +57,28 @@ export default function OnboardingScreen({ onDone }) {
   const elapsedRef = useRef(0);
   const startTimeRef = useRef(null);
 
-  const handleDone = async () => {
+  const finish = async () => {
     await AsyncStorage.setItem("fitscan_onboarding_done", "true");
     onDone();
   };
 
+  // Fin des slides (ou « Passer ») : on enchaîne sur la saisie du profil.
+  const toProfile = () => {
+    if (animRef.current) animRef.current.stop();
+    setStep("profile");
+  };
+
+  const submitProfile = async (profile) => {
+    try {
+      await saveProfile(profile);
+    } finally {
+      // Un échec d'écriture ne doit pas bloquer l'entrée dans l'app : le profil reste modifiable.
+      finish();
+    }
+  };
+
   const goTo = (index) => {
-    if (index >= SLIDES.length) { handleDone(); return; }
+    if (index >= SLIDES.length) { toProfile(); return; }
     if (index < 0) return;
     progresses.forEach((p, i) => p.setValue(i < index ? 1 : 0));
     elapsedRef.current = 0;
@@ -94,17 +114,49 @@ export default function OnboardingScreen({ onDone }) {
   };
 
   useEffect(() => {
+    if (step !== "slides") return undefined;
     pausedRef.current = false;
     elapsedRef.current = 0;
     startAnim(0);
     return () => { if (animRef.current) animRef.current.stop(); };
-  }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTap = (e) => {
     if (pausedRef.current) return;
     if (e.nativeEvent.locationX > SW / 2) goTo(current + 1);
     else goTo(current - 1);
   };
+
+  if (step === "profile") {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <KeyboardAwareScrollView
+          contentContainerStyle={styles.profileContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid
+          extraScrollHeight={80}
+        >
+          <View style={styles.chip}>
+            <Feather name="user" size={12} color={C.accent} />
+            <Text style={styles.chipText}>PROFIL · DERNIÈRE ÉTAPE</Text>
+          </View>
+          <Text style={styles.title}>FAISONS{"\n"}CONNAISSANCE.</Text>
+          <Text style={styles.body}>
+            Quelques infos pour personnaliser tes séances. Tout reste modifiable depuis ton profil.
+          </Text>
+
+          <ProfileForm
+            initial={DEFAULT_PROFILE}
+            submitLabel="C'EST PARTI"
+            onSubmit={submitProfile}
+            onSkip={finish}
+          />
+        </KeyboardAwareScrollView>
+      </SafeAreaView>
+    );
+  }
 
   const slide = SLIDES[current];
   const isLast = current === SLIDES.length - 1;
@@ -133,7 +185,7 @@ export default function OnboardingScreen({ onDone }) {
         ))}
       </View>
 
-      <TouchableOpacity style={styles.skipBtn} onPress={handleDone} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.skipBtn} onPress={toProfile} activeOpacity={0.7}>
         <Text style={styles.skipText}>PASSER</Text>
       </TouchableOpacity>
 
@@ -156,7 +208,7 @@ export default function OnboardingScreen({ onDone }) {
 
           <PrimaryButton
             label={isLast ? "COMMENCER" : "CONTINUER"}
-            onPress={() => (isLast ? handleDone() : goTo(current + 1))}
+            onPress={() => (isLast ? toProfile() : goTo(current + 1))}
             style={styles.cta}
           />
           <Text style={styles.hint}>Maintenir pour pauser · appuyer pour avancer</Text>
@@ -185,6 +237,7 @@ const styles = StyleSheet.create({
 
   tapZone: { flex: 1, justifyContent: "flex-end" },
   content: { paddingHorizontal: 24, paddingBottom: 36 },
+  profileContainer: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40 },
 
   chip: {
     flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start",

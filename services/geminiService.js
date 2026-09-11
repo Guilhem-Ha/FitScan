@@ -1,3 +1,5 @@
+import { getProfile } from "../data/storage";
+
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY; // Remplace par ta clé Gemini
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
@@ -56,6 +58,16 @@ function parseJSON(text) {
   return JSON.parse(cleaned);
 }
 
+// « 29 ans, 75 kg, 180 cm », limité aux données renseignées dans le profil.
+async function physicalProfileLine() {
+  const profile = await getProfile();
+  return [
+    profile.age != null && `${profile.age} ans`,
+    profile.weightKg != null && `${profile.weightKg} kg`,
+    profile.heightCm != null && `${profile.heightCm} cm`,
+  ].filter(Boolean).join(", ");
+}
+
 export async function identifyEquipment(base64Image) {
   const prompt = `Tu es un expert en équipement de fitness.
 Analyse cette photo et identifie TOUS les appareils ou outils de fitness visibles.
@@ -94,12 +106,16 @@ export async function generateWorkout({ equipments, level, goal, split, duration
   const splitLabel = split === "upper" ? "Haut du corps uniquement"
     : split === "lower" ? "Bas du corps uniquement"
     : "Corps entier (Full Body)";
+  const physical = await physicalProfileLine();
+  const physicalLine = physical
+    ? `Profil physique : ${physical} (adapte le volume et les charges en conséquence)\n`
+    : "";
 
   const prompt = `Tu es un coach fitness expert. Génère une séance d'entraînement complète.
 
 Équipement disponible : ${equipmentList}
 Niveau : ${level}
-Objectif : ${goal}
+${physicalLine}Objectif : ${goal}
 Muscles ciblés : ${splitLabel}
 Durée souhaitée : ${duration} minutes
 

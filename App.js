@@ -18,6 +18,7 @@ import WorkoutScreen from "./screens/WorkoutScreen";
 import QuickScanScreen from "./screens/QuickScanScreen";
 import ProgressScreen from "./screens/ProgressScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
+import ProfileScreen from "./screens/ProfileScreen";
 
 const Stack = createNativeStackNavigator();
 const TABS = [
@@ -149,6 +150,7 @@ export default function App() {
             <Stack.Screen name="NewSession" component={NewSessionScreen} />
             <Stack.Screen name="Scan" component={ScanScreen} />
             <Stack.Screen name="Workout" component={WorkoutScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </GestureHandlerRootView>

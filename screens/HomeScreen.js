@@ -3,14 +3,10 @@ import { View, Text, StyleSheet, FlatList, StatusBar, Animated, TouchableOpacity
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { getSessions, deleteSession, sessionMinutes } from "../data/storage";
+import { getSessions, deleteSession, sessionMinutes, getProfile, DEFAULT_PROFILE } from "../data/storage";
 import { streakDays, weekSessions } from "../data/stats";
 import { C, T, R, E } from "../theme";
-import { Press, PrimaryButton, IconBadge, Ring } from "../ui/kit";
-
-// Objectif hebdomadaire de la carte « Série en cours » : la maquette montre
-// 4 séances faites et « encore 1 », soit 5 par semaine.
-const WEEKLY_GOAL = 5;
+import { Press, PrimaryButton, Ring } from "../ui/kit";
 
 const GOAL_LABELS = { force: "FORCE", cardio: "CARDIO", mixte: "MIXTE" };
 const LEVEL_LABELS = { debutant: "DÉBUTANT", intermediaire: "INTER", avance: "AVANCÉ" };
@@ -21,12 +17,12 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).toUpperCase();
 }
 
-function StreakCard({ sessions }) {
+function StreakCard({ sessions, weeklyGoal }) {
   const streak = streakDays(sessions);
   const week = weekSessions(sessions);
   const trainedDays = Array(7).fill(false);
   week.forEach((s) => { trainedDays[(new Date(s.date).getDay() + 6) % 7] = true; });
-  const remaining = Math.max(0, WEEKLY_GOAL - week.length);
+  const remaining = Math.max(0, weeklyGoal - week.length);
 
   return (
     <View style={styles.hero}>
@@ -40,7 +36,7 @@ function StreakCard({ sessions }) {
               : `Encore ${remaining} séance${remaining > 1 ? "s" : ""} cette semaine`}
           </Text>
         </View>
-        <Ring size={54} stroke={5} value={week.length / WEEKLY_GOAL} color={INK} trackColor={INK_SOFT} />
+        <Ring size={54} stroke={5} value={week.length / weeklyGoal} color={INK} trackColor={INK_SOFT} />
       </View>
       <View style={styles.segments}>
         {trainedDays.map((on, i) => (
@@ -108,10 +104,16 @@ function SessionCard({ item, onPress, onDelete }) {
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [sessions, setSessions] = useState([]);
+  const [profile, setProfile] = useState(DEFAULT_PROFILE);
 
+  // Le profil est relu avec les séances : un prénom modifié apparaît au retour sur l'accueil.
   useEffect(() => {
-    getSessions().then(setSessions);
-    const interval = setInterval(() => getSessions().then(setSessions), 2000);
+    const load = () => {
+      getSessions().then(setSessions);
+      getProfile().then(setProfile);
+    };
+    load();
+    const interval = setInterval(load, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -121,18 +123,25 @@ export default function HomeScreen() {
   };
 
   const greeting = new Date().getHours() < 18 ? "Salut" : "Bonsoir";
+  const initial = profile.firstName ? profile.firstName.charAt(0).toUpperCase() : null;
 
   const header = (
     <>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>{greeting}</Text>
+          <Text style={styles.greeting}>
+            {greeting}{profile.firstName ? ` ${profile.firstName}` : ""}
+          </Text>
           <Text style={styles.headerTitle}>FITSCAN</Text>
         </View>
-        <IconBadge name="user" size={44} />
+        <Press style={styles.profileBtn} onPress={() => navigation.navigate("Profile")} scaleTo={0.9}>
+          {initial
+            ? <Text style={styles.profileInitial}>{initial}</Text>
+            : <Feather name="user" size={20} color={C.accent} />}
+        </Press>
       </View>
 
-      <StreakCard sessions={sessions} />
+      <StreakCard sessions={sessions} weeklyGoal={profile.weeklyGoal} />
 
       <View style={styles.listHeader}>
         <Text style={styles.listLabel}>HISTORIQUE</Text>
@@ -182,6 +191,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 4, paddingTop: 20, paddingBottom: 18 },
   greeting: { fontFamily: "DMSans_400Regular", fontSize: 14, color: C.textSecondary, marginBottom: 2 },
   headerTitle: { fontFamily: "BebasNeue_400Regular", fontSize: 50, color: C.textPrimary, letterSpacing: 2, lineHeight: 52 },
+  profileBtn: {
+    width: 44, height: 44, borderRadius: 15,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: C.accentSoft, borderWidth: 1, borderColor: "rgba(200,255,0,0.25)",
+  },
+  profileInitial: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.accent, lineHeight: 28 },
 
   hero: {
     backgroundColor: C.accent, borderRadius: R.lg,

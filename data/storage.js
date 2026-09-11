@@ -2,6 +2,32 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SESSIONS_KEY = "fitscan_sessions";
 const WEIGHTS_KEY = "fitscan_weights";
+const PROFILE_KEY = "fitscan_profile";
+
+// ─── Profil ───────────────────────────────────────────────────────
+// Les données physiques restent null tant qu'elles ne sont pas renseignées.
+export const DEFAULT_PROFILE = {
+  firstName: "",
+  weeklyGoal: 3,
+  level: "intermediaire",
+  goal: "mixte",
+  age: null,
+  weightKg: null,
+  heightCm: null,
+};
+
+export async function getProfile() {
+  try {
+    const data = await AsyncStorage.getItem(PROFILE_KEY);
+    return { ...DEFAULT_PROFILE, ...(data ? JSON.parse(data) : {}) };
+  } catch { return { ...DEFAULT_PROFILE }; }
+}
+
+export async function saveProfile(profile) {
+  try {
+    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  } catch (e) { throw new Error("Impossible de sauvegarder le profil"); }
+}
 
 // ─── Sessions ─────────────────────────────────────────────────────
 export async function getSessions() {
