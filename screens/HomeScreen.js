@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
+import { useScreenRefresh } from "../hooks/useScreenRefresh";
 import { View, Text, StyleSheet, FlatList, StatusBar, Animated, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -101,21 +102,17 @@ function SessionCard({ item, onPress, onDelete }) {
   );
 }
 
-export default function HomeScreen() {
+export default function HomeScreen({ isActive = true }) {
   const navigation = useNavigation();
   const [sessions, setSessions] = useState([]);
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
 
   // Le profil est relu avec les séances : un prénom modifié apparaît au retour sur l'accueil.
-  useEffect(() => {
-    const load = () => {
-      getSessions().then(setSessions);
-      getProfile().then(setProfile);
-    };
-    load();
-    const interval = setInterval(load, 2000);
-    return () => clearInterval(interval);
+  const load = useCallback(() => {
+    getSessions().then(setSessions);
+    getProfile().then(setProfile);
   }, []);
+  useScreenRefresh(load, isActive);
 
   const handleDelete = (id) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));

@@ -76,14 +76,15 @@ function MainTabs({ navigation }) {
         scrollEventThrottle={16}
         style={{ flex: 1 }}
       >
+        {/* Les onglets restent montés : chacun apprend ici s'il est affiché. */}
         <View style={{ width: SW, flex: 1 }}>
-          <HomeScreen navigation={navigation} />
+          <HomeScreen navigation={navigation} isActive={activeIndex === 0} />
         </View>
         <View style={{ width: SW, flex: 1 }}>
           <QuickScanScreen navigation={navigation} />
         </View>
         <View style={{ width: SW, flex: 1 }}>
-          <ProgressScreen navigation={navigation} />
+          <ProgressScreen navigation={navigation} isActive={activeIndex === 2} />
         </View>
       </ScrollView>
 

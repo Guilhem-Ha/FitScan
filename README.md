@@ -76,6 +76,8 @@ fitscan/
 ├── theme.js                # Design system (colors, radii, elevation, typography)
 ├── ui/
 │   └── kit.js              # Shared components (Press, Card, buttons, Ring…)
+├── hooks/
+│   └── useScreenRefresh.js # Reload a screen's data when it becomes visible
 ├── screens/
 │   ├── HomeScreen.js       # Session history
 │   ├── NewSessionScreen.js # Session configuration

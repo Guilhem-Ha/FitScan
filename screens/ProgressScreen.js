@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
+import { useScreenRefresh } from "../hooks/useScreenRefresh";
 import { View, Text, StyleSheet, ScrollView, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getSessions, getWeightHistory, sessionMinutes } from "../data/storage";
@@ -121,19 +122,15 @@ function WeightTracking({ history }) {
   );
 }
 
-export default function ProgressScreen() {
+export default function ProgressScreen({ isActive = true }) {
   const [sessions, setSessions] = useState([]);
   const [history, setHistory] = useState({});
 
-  useEffect(() => {
-    const load = () => {
-      getSessions().then(setSessions);
-      getWeightHistory().then(setHistory);
-    };
-    load();
-    const interval = setInterval(load, 2000);
-    return () => clearInterval(interval);
+  const load = useCallback(() => {
+    getSessions().then(setSessions);
+    getWeightHistory().then(setHistory);
   }, []);
+  useScreenRefresh(load, isActive);
 
   const record = personalRecord(history);
   const week = weekSessions(sessions);
