@@ -76,8 +76,9 @@ export async function saveWeight(exerciseName, weight, unit = "kg") {
     const key = exerciseName.toLowerCase().trim();
     if (!history[key]) history[key] = [];
     history[key].unshift({ date: new Date().toISOString(), weight, unit });
-    // Garde seulement les 10 dernières entrées par exercice
-    history[key] = history[key].slice(0, 10);
+    // Chaque « OK » ajoute une entrée : 10 ne couvraient parfois qu'une séance,
+    // trop peu pour la courbe de suivi des charges.
+    history[key] = history[key].slice(0, 60);
     await AsyncStorage.setItem(WEIGHTS_KEY, JSON.stringify(history));
   } catch (e) { throw new Error("Impossible de sauvegarder le poids"); }
 }

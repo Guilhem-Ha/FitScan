@@ -2,9 +2,12 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getSessions, getWeightHistory, sessionMinutes } from "../data/storage";
-import { weekSessions, weekMinutesByDay, formatDuration, personalRecord } from "../data/stats";
+import {
+  weekSessions, weekMinutesByDay, formatDuration, personalRecord, weightSeries, formatDayMonth,
+} from "../data/stats";
 import { C, T, R, E } from "../theme";
-import { ProgressBar, IconBadge } from "../ui/kit";
+import { ProgressBar, IconBadge, Chip } from "../ui/kit";
+import LineChart from "../ui/LineChart";
 
 const DAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
 const CHART_HEIGHT = 84;
@@ -54,20 +57,85 @@ function StatTile({ value, label }) {
   );
 }
 
+/* Courbe de la charge maximale notée par jour, pour l'exercice choisi.
+   Les exercices sont rangés du plus récemment travaillé au plus ancien. */
+function WeightTracking({ history }) {
+  const [selected, setSelected] = useState(null);
+  const exercises = Object.entries(history)
+    .filter(([, entries]) => entries?.length)
+    .sort((a, b) => new Date(b[1][0].date) - new Date(a[1][0].date))
+    .map(([name]) => name);
+
+  if (exercises.length === 0) return null;
+
+  const current = exercises.includes(selected) ? selected : exercises[0];
+  const series = weightSeries(history[current]);
+  const first = series[0];
+  const last = series[series.length - 1];
+  const delta = Math.round((last.kg - first.kg) * 10) / 10;
+  const values = series.map((p) => p.kg);
+
+  return (
+    <View style={styles.card}>
+      <Text style={[styles.cardLabel, { marginBottom: 12 }]}>SUIVI DES CHARGES</Text>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chips}
+        style={styles.chipsScroll}
+      >
+        {exercises.map((name) => (
+          <Chip key={name} label={name} active={name === current} onPress={() => setSelected(name)} />
+        ))}
+      </ScrollView>
+
+      <View style={styles.weightHead}>
+        <Text style={styles.weightValue}>{last.kg} KG</Text>
+        {series.length > 1 ? (
+          <View style={[styles.deltaPill, delta <= 0 && styles.deltaPillFlat]}>
+            <Text style={[styles.deltaText, delta <= 0 && { color: C.textSecondary }]}>
+              {delta === 0
+                ? `Stable depuis le ${formatDayMonth(first.date)}`
+                : `${delta > 0 ? "+" : "−"}${Math.abs(delta)} kg depuis le ${formatDayMonth(first.date)}`}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {series.length > 1 ? (
+        <>
+          <LineChart values={values} height={130} />
+          <View style={styles.axis}>
+            <Text style={styles.axisText}>{formatDayMonth(first.date)}</Text>
+            <Text style={styles.axisText}>{Math.min(...values)} – {Math.max(...values)} kg</Text>
+            <Text style={styles.axisText}>{formatDayMonth(last.date)}</Text>
+          </View>
+        </>
+      ) : (
+        <Text style={styles.weightHint}>
+          Note une charge pour cet exercice lors d'une autre séance pour voir ta courbe.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function ProgressScreen() {
   const [sessions, setSessions] = useState([]);
-  const [record, setRecord] = useState(null);
+  const [history, setHistory] = useState({});
 
   useEffect(() => {
     const load = () => {
       getSessions().then(setSessions);
-      getWeightHistory().then((history) => setRecord(personalRecord(history)));
+      getWeightHistory().then(setHistory);
     };
     load();
     const interval = setInterval(load, 2000);
     return () => clearInterval(interval);
   }, []);
 
+  const record = personalRecord(history);
   const week = weekSessions(sessions);
   const weekMinutes = week.reduce((a, s) => a + sessionMinutes(s), 0);
   const weekExercises = week.reduce((a, s) => a + (s.workout?.exercises?.length || 0), 0);
@@ -105,6 +173,8 @@ export default function ProgressScreen() {
               <StatTile value={formatDuration(weekMinutes)} label="Entraînement" />
               <StatTile value={weekExercises} label="Exercices" />
             </View>
+
+            <WeightTracking history={history} />
 
             {topMuscles.length > 0 && (
               <View style={styles.card}>
@@ -180,6 +250,17 @@ const styles = StyleSheet.create({
   },
   tileValue: { fontFamily: "BebasNeue_400Regular", fontSize: 30, color: C.accent, lineHeight: 32 },
   tileLabel: { ...T.small, fontSize: 11, color: C.textMuted },
+
+  chipsScroll: { marginHorizontal: -16, marginBottom: 14 },
+  chips: { gap: 6, paddingHorizontal: 16 },
+  weightHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 },
+  weightValue: { fontFamily: "BebasNeue_400Regular", fontSize: 36, color: C.textPrimary, letterSpacing: 0.5, lineHeight: 38 },
+  deltaPill: { flexShrink: 1, backgroundColor: C.accentSoft, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  deltaPillFlat: { backgroundColor: C.surface2 },
+  deltaText: { fontFamily: "DMSans_600SemiBold", fontSize: 11, color: C.accent },
+  axis: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
+  axisText: { fontFamily: "DMSans_400Regular", fontSize: 11, color: C.textMuted },
+  weightHint: { ...T.small, color: C.textMuted, lineHeight: 17 },
 
   muscleTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   muscleName: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: C.textPrimary },

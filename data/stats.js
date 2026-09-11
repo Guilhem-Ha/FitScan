@@ -86,6 +86,27 @@ export function repsCount(reps) {
 // « 3 240 » : séparateur de milliers posé à la main, sans dépendre d'Intl sous Hermes.
 export const formatKg = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 
+const pad2 = (n) => String(n).padStart(2, "0");
+export const formatDayMonth = (d) => `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}`;
+
+/* Série à tracer pour un exercice : charge maximale notée par jour, en kg, du plus
+   ancien au plus récent. Un « OK » par série donne plusieurs saisies le même jour :
+   seule la plus lourde compte. */
+export function weightSeries(entries, limit = 12) {
+  const byDay = new Map();
+  (entries || []).forEach((entry) => {
+    const date = new Date(entry.date);
+    const key = dayKey(date);
+    const kg = toKg(entry);
+    const known = byDay.get(key);
+    if (!known || kg > known.kg) byDay.set(key, { date, kg });
+  });
+  return [...byDay.values()]
+    .sort((a, b) => a.date - b.date)
+    .slice(-limit)
+    .map((p) => ({ date: p.date, kg: round1(p.kg) }));
+}
+
 /* Volume réellement soulevé : charge notée × reps × séries cochées.
    `performed[i]` suit l'ordre des exercices : { setsDone, weight: { weight, unit } | null }. */
 export function performedVolumeKg(exercises, performed) {
