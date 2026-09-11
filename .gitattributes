@@ -1,0 +1,8 @@
+# expo-updates calcule l'empreinte runtime en hachant ces fichiers octet par
+# octet. Avec core.autocrlf, leurs fins de ligne varient d'un checkout à l'autre,
+# et une update publiée vise alors un runtime qu'aucun APK ne possède.
+# Les valeurs ci-dessous reproduisent l'APK preview au runtime 5d391934… :
+# ne les changer qu'au moment d'un nouveau build natif.
+.easignore text eol=crlf
+.gitignore text eol=crlf
+plugins/** text eol=lf
