@@ -21,8 +21,6 @@ function formatDate(iso) {
 function StreakCard({ sessions, weeklyGoal }) {
   const streak = streakDays(sessions);
   const week = weekSessions(sessions);
-  const trainedDays = Array(7).fill(false);
-  week.forEach((s) => { trainedDays[(new Date(s.date).getDay() + 6) % 7] = true; });
   const remaining = Math.max(0, weeklyGoal - week.length);
 
   return (
@@ -37,12 +35,9 @@ function StreakCard({ sessions, weeklyGoal }) {
               : `Encore ${remaining} séance${remaining > 1 ? "s" : ""} cette semaine`}
           </Text>
         </View>
-        <Ring size={54} stroke={5} value={week.length / weeklyGoal} color={INK} trackColor={INK_SOFT} />
-      </View>
-      <View style={styles.segments}>
-        {trainedDays.map((on, i) => (
-          <View key={i} style={[styles.segment, { backgroundColor: on ? INK : INK_SOFT }]} />
-        ))}
+        <Ring size={62} stroke={5} value={week.length / weeklyGoal} color={INK} trackColor={INK_SOFT}>
+          <Text style={styles.heroRingText}>{week.length}/{weeklyGoal}</Text>
+        </Ring>
       </View>
     </View>
   );
@@ -91,7 +86,8 @@ function SessionCard({ item, onPress, onDelete }) {
       ) : (
         // Même hauteur que la carte : la liste ne saute pas en passant en mode suppression.
         <View style={[styles.deleteRow, height && { height }]}>
-          <TouchableOpacity style={styles.cancelZone} onPress={hideDelete} activeOpacity={1} onLongPress={hideDelete} delayLongPress={400} />
+          {/* Toute la carte annule ; le bouton reste centre au-dessus. */}
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={hideDelete} activeOpacity={1} onLongPress={hideDelete} delayLongPress={400} />
           <Press style={styles.deleteBtnInner} onPress={() => { hideDelete(); onDelete(item.id); }}>
             <Feather name="trash-2" size={15} color="#fff" />
             <Text style={styles.deleteBtnText}>SUPPRIMER</Text>
@@ -130,7 +126,6 @@ export default function HomeScreen({ isActive = true }) {
   const open = (navigate) => { if (navigation.isFocused()) navigate(); };
 
   const greeting = new Date().getHours() < 18 ? "Salut" : "Bonsoir";
-  const initial = profile.firstName ? profile.firstName.charAt(0).toUpperCase() : null;
 
   const header = (
     <>
@@ -147,9 +142,7 @@ export default function HomeScreen({ isActive = true }) {
           scaleTo={0.9}
           accessibilityLabel={profile.firstName ? `Profil de ${profile.firstName}` : "Profil"}
         >
-          {initial
-            ? <Text style={styles.profileInitial}>{initial}</Text>
-            : <Feather name="user" size={20} color={C.accent} />}
+          <Feather name="user" size={20} color={C.accent} />
         </Press>
       </View>
 
@@ -208,7 +201,6 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     backgroundColor: C.accentSoft, borderWidth: 1, borderColor: "rgba(200,255,0,0.25)",
   },
-  profileInitial: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.accent, lineHeight: 28 },
 
   hero: {
     backgroundColor: C.accent, borderRadius: R.lg,
@@ -220,8 +212,7 @@ const styles = StyleSheet.create({
   heroEyebrow: { ...T.label, fontSize: 10, color: "rgba(10,10,10,0.6)", marginBottom: 2 },
   heroValue: { fontFamily: "BebasNeue_400Regular", fontSize: 46, color: INK, letterSpacing: 1, lineHeight: 48 },
   heroSub: { fontFamily: "DMSans_600SemiBold", fontSize: 13, color: "rgba(10,10,10,0.75)" },
-  segments: { flexDirection: "row", gap: 6, marginTop: 16 },
-  segment: { flex: 1, height: 4, borderRadius: R.pill },
+  heroRingText: { fontFamily: "DMSans_700Bold", fontSize: 14, color: INK },
 
   listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 4, paddingTop: 16, paddingBottom: 4 },
   listLabel: { ...T.label, color: C.textPrimary },
@@ -239,8 +230,7 @@ const styles = StyleSheet.create({
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
   cardMetaText: { fontFamily: "DMSans_400Regular", fontSize: 13, color: C.textSecondary },
 
-  deleteRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingRight: 16, minHeight: 110 },
-  cancelZone: { flex: 1, height: "100%" },
+  deleteRow: { alignItems: "center", justifyContent: "center", minHeight: 110 },
   deleteBtnInner: {
     flexDirection: "row", alignItems: "center", gap: 8,
     borderWidth: 1.5, borderColor: "#fff", borderRadius: R.pill,
