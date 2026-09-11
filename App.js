@@ -118,9 +118,10 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(null);
 
   useEffect(() => {
-    AsyncStorage.getItem("fitscan_onboarding_done").then((val) => {
-      setShowOnboarding(val !== "true");
-    });
+    AsyncStorage.getItem("fitscan_onboarding_done")
+      .then((val) => setShowOnboarding(val !== "true"))
+      // Sans ce repli, une lecture en échec laissait l'app bloquée sur le chargement.
+      .catch(() => setShowOnboarding(false));
   }, []);
 
   if (!fontsLoaded || showOnboarding === null) {

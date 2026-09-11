@@ -4,6 +4,15 @@ const SESSIONS_KEY = "fitscan_sessions";
 const WEIGHTS_KEY = "fitscan_weights";
 const PROFILE_KEY = "fitscan_profile";
 
+/* Lecture stricte, réservée aux écritures. Les lectures d'affichage ci-dessous
+   renvoient une valeur vide en cas d'échec ; une écriture qui s'appuierait dessus
+   remplacerait tout l'historique par la seule entrée ajoutée. Ici l'erreur
+   remonte, et rien n'est écrit. */
+async function readStrict(key, fallback) {
+  const data = await AsyncStorage.getItem(key);
+  return data ? JSON.parse(data) : fallback;
+}
+
 // ─── Profil ───────────────────────────────────────────────────────
 // Les données physiques restent null tant qu'elles ne sont pas renseignées.
 export const DEFAULT_PROFILE = {
@@ -39,7 +48,7 @@ export async function getSessions() {
 
 export async function saveSession(session) {
   try {
-    const sessions = await getSessions();
+    const sessions = await readStrict(SESSIONS_KEY, []);
     const newSession = { ...session, id: Date.now().toString(), date: new Date().toISOString() };
     sessions.unshift(newSession);
     await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
@@ -55,13 +64,13 @@ export function sessionMinutes(session) {
 
 export async function deleteSession(id) {
   try {
-    const sessions = await getSessions();
+    const sessions = await readStrict(SESSIONS_KEY, []);
     await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.filter((s) => s.id !== id)));
   } catch (e) { throw new Error("Impossible de supprimer la séance"); }
 }
 
 // ─── Poids par exercice ───────────────────────────────────────────
-// Format : { "Squat": [{ date, weight, unit }], ... }
+// Format : { "squat": [{ date, weight, unit }], ... }, du plus récent au plus ancien.
 
 export async function getWeightHistory() {
   try {
@@ -72,7 +81,7 @@ export async function getWeightHistory() {
 
 export async function saveWeight(exerciseName, weight, unit = "kg") {
   try {
-    const history = await getWeightHistory();
+    const history = await readStrict(WEIGHTS_KEY, {});
     const key = exerciseName.toLowerCase().trim();
     if (!history[key]) history[key] = [];
     history[key].unshift({ date: new Date().toISOString(), weight, unit });

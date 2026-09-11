@@ -40,12 +40,14 @@ export default function QuickScanScreen() {
         Alert.alert("Rien détecté", "Essaie un autre angle ou une autre photo.");
         return;
       }
-      const withExercises = await Promise.all(
-        found.map(async (eq) => {
-          const data = await getQuickExercises(eq.name);
-          return { ...eq, exercises: data.exercises || [] };
-        })
-      );
+      // Un appareil dont la demande échoue ne doit pas faire perdre les exercices des autres.
+      const settled = await Promise.allSettled(found.map((eq) => getQuickExercises(eq.name)));
+      const withExercises = found
+        .map((eq, i) => (settled[i].status === "fulfilled" ? { ...eq, exercises: settled[i].value.exercises } : null))
+        .filter((eq) => eq && eq.exercises.length > 0);
+      if (withExercises.length === 0) {
+        throw settled.find((r) => r.status === "rejected")?.reason || new Error("Aucun exercice proposé. Réessaie.");
+      }
       setResults(withExercises);
     } catch (err) {
       Alert.alert("Erreur", err.message);

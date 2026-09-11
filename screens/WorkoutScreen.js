@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput } from "react-native";
+import { View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -40,7 +40,12 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight, onSaved }) 
   const handleSave = async () => {
     const value = parseFloat(String(weight).replace(",", "."));
     if (!Number.isFinite(value)) return;
-    await saveWeight(exerciseName, value, unit);
+    try {
+      await saveWeight(exerciseName, value, unit);
+    } catch (err) {
+      Alert.alert("Poids non enregistré", err.message);
+      return;
+    }
     onSaved?.({ weight: value, unit });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -307,6 +312,34 @@ export default function WorkoutScreen({ navigation, route }) {
   const [openIndex, setOpenIndex] = useState(readOnly ? -1 : 0);
   const startedAt = useRef(Date.now());
   const alreadySaved = useRef(false);
+  // Sortie voulue (confirmée, ou retour à l'accueil) : la garde ci-dessous la laisse passer.
+  const allowLeave = useRef(false);
+
+  /* Quitter une séance commencée (bouton retour, geste Android) perdait les séries
+     cochées sans prévenir. Les charges notées, elles, sont déjà dans le suivi. */
+  useEffect(() => {
+    if (readOnly) return undefined;
+    return navigation.addListener("beforeRemove", (e) => {
+      const started = Object.values(progress).some((n) => n > 0);
+      if (!started || alreadySaved.current || allowLeave.current) return;
+      e.preventDefault();
+      Alert.alert(
+        "Quitter la séance ?",
+        "Tes séries cochées ne seront pas enregistrées. Les charges déjà notées restent dans ton suivi.",
+        [
+          { text: "Rester", style: "cancel" },
+          {
+            text: "Quitter",
+            style: "destructive",
+            onPress: () => {
+              allowLeave.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+  }, [navigation, progress, readOnly]);
 
   if (!workout) return null;
 
@@ -333,6 +366,22 @@ export default function WorkoutScreen({ navigation, route }) {
   const finishSession = async () => {
     // Déjà enregistrée : revenir à la séance puis re-terminer réaffiche le même bilan.
     if (alreadySaved.current) { setShowComplete(true); return; }
+
+    // Sans série cochée, rien n'a été fait : pas de séance comptée dans la série ni l'objectif.
+    if (setsDone === 0) {
+      Alert.alert("Aucune série cochée", "Coche au moins une série pour enregistrer la séance.", [
+        { text: "Continuer la séance", style: "cancel" },
+        {
+          text: "Quitter sans enregistrer",
+          style: "destructive",
+          onPress: () => {
+            allowLeave.current = true;
+            navigation.goBack();
+          },
+        },
+      ]);
+      return;
+    }
 
     const minutes = Math.max(1, Math.round((Date.now() - startedAt.current) / 60000));
     // Ce qui a vraiment été fait, exercice par exercice, pour l'historique.
@@ -375,6 +424,8 @@ export default function WorkoutScreen({ navigation, route }) {
           elapsedMin={elapsedMin}
           saveFailed={saveFailed}
           onGoHome={() => {
+            // Même si l'enregistrement a échoué, l'utilisateur a choisi de partir.
+            allowLeave.current = true;
             setShowComplete(false);
             navigation.reset({ index: 0, routes: [{ name: "Main" }] });
           }}

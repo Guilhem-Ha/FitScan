@@ -7,6 +7,17 @@ const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini
 // résout jamais et l'écran reste sur son indicateur de chargement.
 const TIMEOUT_MS = 30000;
 
+// Les messages d'erreur de l'API sont en anglais et parlent de champs internes.
+function httpErrorMessage(status, body) {
+  const reason = body?.error?.details?.find((d) => d?.reason)?.reason;
+  if (reason === "API_KEY_INVALID" || status === 401 || status === 403) {
+    return "Clé API Gemini invalide ou non autorisée.";
+  }
+  if (status === 429) return "Quota Gemini atteint. Réessaie dans quelques minutes.";
+  if (status >= 500) return "Gemini est indisponible pour le moment. Réessaie plus tard.";
+  return `Erreur Gemini (${status}). Réessaie.`;
+}
+
 async function callGemini(parts) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -24,6 +35,8 @@ async function callGemini(parts) {
           // La réflexion de gemini-2.5-flash triplait le temps de réponse (~10 s
           // contre ~3 s) sans améliorer un JSON dont le format est déjà imposé.
           thinkingConfig: { thinkingBudget: 0 },
+          // JSON strict : plus de balises markdown ni de texte autour de la réponse.
+          responseMimeType: "application/json",
         },
       }),
     });
@@ -36,12 +49,13 @@ async function callGemini(parts) {
     clearTimeout(timer);
   }
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`Erreur Gemini: ${err.error?.message || response.status}`);
+    // Le corps d'erreur n'est pas toujours du JSON (page HTML d'une passerelle, par exemple).
+    const body = await response.json().catch(() => null);
+    throw new Error(httpErrorMessage(response.status, body));
   }
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Réponse vide de Gemini");
+  const data = await response.json().catch(() => null);
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Réponse vide de Gemini. Réessaie.");
   return text;
 }
 
@@ -55,7 +69,49 @@ function parseJSON(text) {
   if (start !== -1 && end !== -1) {
     cleaned = cleaned.substring(start, end + 1);
   }
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Le texte brut part dans les logs, pas dans l'alerte affichée.
+    console.warn("Réponse Gemini illisible :", text);
+    throw new Error("Réponse de Gemini illisible. Réessaie.");
+  }
+}
+
+// ─── Nettoyage des réponses ───────────────────────────────────────
+/* Gemini suit presque toujours le format demandé, mais un champ manquant ou mal
+   typé suffisait à faire planter un écran : muscles en texte (.join, .map),
+   exercice sans nom (.toUpperCase), séries « 3-4 » (aucune case à cocher). */
+const asText = (v) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
+const asList = (v) =>
+  (Array.isArray(v) ? v : typeof v === "string" ? v.split(/[,;·]/) : []).map(asText).filter(Boolean);
+// parseInt garde le premier nombre : « 3-4 » devient 3.
+const asInt = (v, fallback, min, max) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+const CATEGORIES = ["cardio", "force", "poids_libre", "accessoire"];
+
+function cleanExercise(raw) {
+  const name = asText(raw?.name);
+  if (!name) return null;
+  return {
+    name,
+    equipment: asText(raw.equipment),
+    sets: asInt(raw.sets, 3, 1, 10),
+    reps: asText(raw.reps) || "10",
+    rest: asInt(raw.rest, 60, 0, 600),
+    muscles: asList(raw.muscles),
+    tips: asText(raw.tips),
+    youtubeQuery: asText(raw.youtubeQuery) || `${name} exécution`,
+    requiresWeight: raw.requiresWeight === true || raw.requiresWeight === "true",
+  };
+}
+
+function cleanPhase(raw, fallbackDuration) {
+  if (!raw || typeof raw !== "object") return null;
+  const exercises = asList(raw.exercises);
+  return exercises.length ? { duration: asInt(raw.duration, fallbackDuration, 0, 60), exercises } : null;
 }
 
 // « 29 ans, 75 kg, 180 cm », limité aux données renseignées dans le profil.
@@ -77,11 +133,8 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
   "equipments": [
     {
       "name": "Nom de l'appareil en français",
-      "emoji": "un seul emoji qui représente visuellement cet appareil (ex: 🏋️ pour haltères, 🚴 pour vélo, 🏃 pour tapis de course)",
-      "wikipediaSearch": "terme de recherche en anglais pour trouver cet appareil sur Wikipedia (ex: dumbbell, barbell, treadmill, rowing machine)",
       "category": "cardio | force | poids_libre | accessoire",
-      "muscles": ["muscle1", "muscle2"],
-      "confidence": 0.95
+      "muscles": ["muscle1", "muscle2"]
     }
   ]
 }
@@ -89,16 +142,23 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
 Si aucun équipement de fitness n'est détecté :
 { "equipments": [] }`;
 
-  const text = await callGemini([
+  const raw = parseJSON(await callGemini([
     { inline_data: { mime_type: "image/jpeg", data: base64Image } },
     { text: prompt },
-  ]);
+  ]));
 
-  try {
-    return parseJSON(text);
-  } catch {
-    throw new Error("Réponse non parsable : " + text);
-  }
+  const equipments = (Array.isArray(raw?.equipments) ? raw.equipments : [])
+    .map((e) => {
+      const name = asText(e?.name);
+      if (!name) return null;
+      return {
+        name,
+        category: CATEGORIES.includes(e.category) ? e.category : "accessoire",
+        muscles: asList(e.muscles),
+      };
+    })
+    .filter(Boolean);
+  return { equipments };
 }
 
 export async function generateWorkout({ equipments, level, goal, split, duration }) {
@@ -146,13 +206,17 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks. Sois CONCIS d
   }
 }`;
 
-  const text = await callGemini([{ text: prompt }]);
+  const raw = parseJSON(await callGemini([{ text: prompt }]));
+  const exercises = (Array.isArray(raw?.exercises) ? raw.exercises : []).map(cleanExercise).filter(Boolean);
+  if (exercises.length === 0) throw new Error("Gemini n'a proposé aucun exercice. Réessaie.");
 
-  try {
-    return parseJSON(text);
-  } catch {
-    throw new Error("Réponse non parsable : " + text);
-  }
+  return {
+    title: asText(raw.title) || "Ma séance",
+    totalDuration: asInt(raw.totalDuration, Number(duration) || 45, 5, 240),
+    warmup: cleanPhase(raw.warmup, 5),
+    exercises,
+    cooldown: cleanPhase(raw.cooldown, 5),
+  };
 }
 
 export async function getQuickExercises(equipmentName) {
@@ -174,10 +238,8 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
   ]
 }`;
 
-  const text = await callGemini([{ text: prompt }]);
-  try {
-    return parseJSON(text);
-  } catch {
-    throw new Error("Réponse non parsable : " + text);
-  }
+  const raw = parseJSON(await callGemini([{ text: prompt }]));
+  return {
+    exercises: (Array.isArray(raw?.exercises) ? raw.exercises : []).map(cleanExercise).filter(Boolean),
+  };
 }

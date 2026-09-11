@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from "react";
 import { useScreenRefresh } from "../hooks/useScreenRefresh";
-import { View, Text, StyleSheet, FlatList, StatusBar, Animated, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, FlatList, StatusBar, Animated, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -114,9 +114,15 @@ export default function HomeScreen({ isActive = true }) {
   }, []);
   useScreenRefresh(load, isActive);
 
-  const handleDelete = (id) => {
+  // Retrait immédiat de la liste ; si l'écriture échoue, on prévient et on recharge.
+  const handleDelete = async (id) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
-    deleteSession(id);
+    try {
+      await deleteSession(id);
+    } catch (err) {
+      Alert.alert("Suppression impossible", err.message);
+      load();
+    }
   };
 
   const greeting = new Date().getHours() < 18 ? "Salut" : "Bonsoir";
