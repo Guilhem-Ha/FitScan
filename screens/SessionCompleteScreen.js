@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, StatusBar, Vibration, Animated, Easing, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { getSessions, getWeightHistory } from "../data/storage";
-import { streakDays } from "../data/stats";
+import { getSessions } from "../data/storage";
+import { streakDays, performedVolumeKg, formatKg } from "../data/stats";
 import { C, R } from "../theme";
 import { Press } from "../ui/kit";
 
@@ -15,37 +15,13 @@ const MONO = Platform.select({ ios: "Menlo", default: "monospace" });
 const pad2 = (n) => String(n).padStart(2, "0");
 const formatStamp = (d) =>
   `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-// « 3 240 » : séparateur de milliers posé à la main, sans dépendre d'Intl sous Hermes.
-const formatKg = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-
-/* Reps renvoyées par Gemini : "10-12", "15", "30s". Seules les répétitions
-   comptent dans le volume (borne basse d'une fourchette), pas les efforts chronométrés. */
-function repsCount(reps) {
-  const s = String(reps ?? "");
-  if (/\d\s*(s|sec|min)\b/i.test(s)) return 0;
-  const m = s.match(/\d+/);
-  return m ? parseInt(m[0], 10) : 0;
-}
-
-/* Volume = charge × reps × séries cochées, pour chaque exercice dont un poids a
-   été noté pendant cette séance. Les charges en lbs sont converties en kg. */
-async function sessionVolumeKg(exercises, progress, startedAt) {
-  const history = await getWeightHistory();
-  return exercises.reduce((total, ex, i) => {
-    const entry = history[ex.name.toLowerCase().trim()]?.[0];
-    if (!entry || new Date(entry.date).getTime() < startedAt) return total;
-    const kg = entry.unit === "lbs" ? entry.weight * 0.4536 : entry.weight;
-    return total + kg * repsCount(ex.reps) * (progress[i] || 0);
-  }, 0);
-}
 
 /* Écran de fin de séance. Props :
-   workout, progress (séries cochées par index d'exercice), startedAt (ms),
-   elapsedMin, saveFailed, onGoHome */
+   workout, performed (détail par exercice, cf. performedVolumeKg), elapsedMin,
+   saveFailed, onGoHome */
 export default function SessionCompleteScreen({
-  workout = {}, progress = {}, startedAt = 0, elapsedMin, saveFailed, onGoHome,
+  workout = {}, performed = [], elapsedMin, saveFailed, onGoHome,
 }) {
-  const [volume, setVolume] = useState(null);
   const [streak, setStreak] = useState(null);
   const enter = useRef(new Animated.Value(0)).current;
   const finishedAt = useRef(new Date()).current;
@@ -54,20 +30,20 @@ export default function SessionCompleteScreen({
   useEffect(() => {
     Vibration.vibrate([0, 200, 100, 200, 100, 300]);
     Animated.timing(enter, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    sessionVolumeKg(exercises, progress, startedAt).then(setVolume).catch(() => setVolume(0));
     // La séance du jour est comptée d'office : son enregistrement peut ne pas être terminé.
     getSessions()
       .then((sessions) => setStreak(streakDays([...sessions, { date: new Date().toISOString() }])))
       .catch(() => setStreak(null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const exercisesDone = exercises.filter((ex, i) => (progress[i] || 0) >= (ex.sets || 3)).length;
+  const exercisesDone = exercises.filter((ex, i) => (performed[i]?.setsDone || 0) >= (ex.sets || 3)).length;
+  const volume = performedVolumeKg(exercises, performed);
   const minutes = elapsedMin ?? workout.totalDuration ?? 0;
 
   const rows = [
     ["DURÉE", `${minutes} MIN`],
     ["EXERCICES", `${exercisesDone} / ${exercises.length}`],
-    ["VOLUME", volume ? `${formatKg(volume)} KG` : "—"],
+    ["VOLUME", volume > 0 ? `${formatKg(volume)} KG` : "—"],
     ["SÉRIE", streak ? `${streak} JOUR${streak > 1 ? "S" : ""}` : "—"],
   ];
 

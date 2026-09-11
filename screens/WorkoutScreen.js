@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput } from "re
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { saveSession, saveWeight, getLastWeight } from "../data/storage";
+import { saveSession, saveWeight, getLastWeight, sessionMinutes } from "../data/storage";
+import { performedVolumeKg, formatKg } from "../data/stats";
 import { C, T, R, E } from "../theme";
 import { Press, PrimaryButton, ProgressBar, BackButton, FooterBar } from "../ui/kit";
 import RestTimerScreen from "./RestTimerScreen";
@@ -11,6 +12,8 @@ import SessionCompleteScreen from "./SessionCompleteScreen";
 
 const setsOf = (ex) => ex?.sets || 3;
 const pad2 = (n) => String(n).padStart(2, "0");
+const formatDate = (iso) =>
+  new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 
 // ─── Chrono écoulé ────────────────────────────────────────────────
 // Isolé dans son propre composant : le tic d'une seconde ne re-rend que lui.
@@ -29,14 +32,16 @@ function ElapsedBadge({ startedAt }) {
 }
 
 // ─── Sélecteur de poids ───────────────────────────────────────────
-function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
+function WeightSelector({ exerciseName, lastWeight, suggestedWeight, onSaved }) {
   const [weight, setWeight] = useState("");
   const [unit, setUnit] = useState("kg");
   const [saved, setSaved] = useState(false);
 
   const handleSave = async () => {
-    if (!weight || isNaN(parseFloat(weight))) return;
-    await saveWeight(exerciseName, parseFloat(weight), unit);
+    const value = parseFloat(String(weight).replace(",", "."));
+    if (!Number.isFinite(value)) return;
+    await saveWeight(exerciseName, value, unit);
+    onSaved?.({ weight: value, unit });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -77,15 +82,22 @@ function WeightSelector({ exerciseName, lastWeight, suggestedWeight }) {
 }
 
 // ─── Exercice ─────────────────────────────────────────────────────
-function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
+/* En historique (readOnly), `performed` vient de la séance enregistrée : les séries
+   cochées sont figées et la charge notée remplace le champ de saisie. */
+function ExerciseCard({ ex, index, expanded, onToggle, onSetsChange, onWeightSaved, readOnly, performed }) {
   const totalSets = setsOf(ex);
-  const [done, setDone] = useState([]);
+  const [done, setDone] = useState(() =>
+    readOnly && performed
+      ? Array.from({ length: Math.min(performed.setsDone || 0, totalSets) }, (_, i) => i)
+      : []
+  );
   const [timerSet, setTimerSet] = useState(null);
   const [lastWeight, setLastWeight] = useState(null);
   const allDone = done.length === totalSets;
+  const usedWeight = performed?.weight;
 
   useEffect(() => {
-    if (ex.requiresWeight) getLastWeight(ex.name).then(setLastWeight);
+    if (ex.requiresWeight && !readOnly) getLastWeight(ex.name).then(setLastWeight);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const suggestedWeight = lastWeight ? (lastWeight.weight + 2.5).toFixed(1) : null;
@@ -101,7 +113,7 @@ function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
   };
 
   // Le Modal vit hors des deux vues : replier la carte ne coupe pas un repos en cours.
-  const timer = (
+  const timer = readOnly ? null : (
     <Modal visible={timerSet !== null} transparent animationType="fade" onRequestClose={() => setTimerSet(null)}>
       <RestTimerScreen
         seconds={ex.rest || 60}
@@ -114,10 +126,13 @@ function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
   );
 
   if (!expanded) {
+    const meta = readOnly && performed
+      ? `${performed.setsDone || 0}/${totalSets} séries${usedWeight ? ` · ${usedWeight.weight} ${usedWeight.unit}` : ""}`
+      : `${ex.sets} × ${ex.reps} · ${ex.rest}s${done.length > 0 && !allDone ? ` · ${done.length}/${totalSets} séries` : ""}`;
     return (
       <>
         {timer}
-        <Press style={[styles.collapsed, allDone && styles.collapsedDone]} onPress={onExpand} scaleTo={0.985}>
+        <Press style={[styles.collapsed, allDone && styles.collapsedDone]} onPress={onToggle} scaleTo={0.985}>
           {allDone ? (
             <View style={[styles.indexBox, styles.indexBoxDone]}>
               <Feather name="check" size={16} color={C.bg} />
@@ -126,12 +141,10 @@ function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
             <Text style={styles.collapsedIndex}>{pad2(index + 1)}</Text>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={[styles.collapsedName, allDone && { color: C.textSecondary }]} numberOfLines={1}>
+            <Text style={[styles.collapsedName, allDone && !readOnly && { color: C.textSecondary }]} numberOfLines={1}>
               {ex.name.toUpperCase()}
             </Text>
-            <Text style={styles.collapsedMeta}>
-              {ex.sets} × {ex.reps} · {ex.rest}s{done.length > 0 && !allDone ? ` · ${done.length}/${totalSets} séries` : ""}
-            </Text>
+            <Text style={[styles.collapsedMeta, readOnly && performed && { color: C.textSecondary }]}>{meta}</Text>
           </View>
           <Feather name="chevron-down" size={18} color={C.textMuted} />
         </Press>
@@ -143,7 +156,7 @@ function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
     <View style={[styles.exCard, allDone && styles.exCardDone]}>
       {timer}
 
-      <View style={styles.exTop}>
+      <Press style={styles.exTop} onPress={onToggle} scaleTo={0.99}>
         <View style={[styles.indexBox, allDone && styles.indexBoxDone]}>
           {allDone
             ? <Feather name="check" size={16} color={C.bg} />
@@ -153,7 +166,8 @@ function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
           <Text style={styles.exName}>{ex.name.toUpperCase()}</Text>
           {ex.equipment ? <Text style={styles.exEquip}>{ex.equipment}</Text> : null}
         </View>
-      </View>
+        <Feather name="chevron-up" size={18} color={C.textMuted} />
+      </Press>
 
       <View style={styles.tiles}>
         {[
@@ -168,23 +182,33 @@ function ExerciseCard({ ex, index, expanded, onExpand, onSetsChange }) {
         ))}
       </View>
 
-      {ex.requiresWeight && (
-        <WeightSelector exerciseName={ex.name} lastWeight={lastWeight} suggestedWeight={suggestedWeight} />
-      )}
+      {readOnly ? (
+        usedWeight ? (
+          <View style={[ws.wrap, ws.readOnlyRow]}>
+            <Text style={ws.label}>POIDS UTILISÉ</Text>
+            <Text style={ws.readOnlyValue}>{usedWeight.weight} {usedWeight.unit}</Text>
+          </View>
+        ) : null
+      ) : ex.requiresWeight ? (
+        <WeightSelector
+          exerciseName={ex.name}
+          lastWeight={lastWeight}
+          suggestedWeight={suggestedWeight}
+          onSaved={(w) => onWeightSaved?.(index, w)}
+        />
+      ) : null}
 
       <View style={styles.setsRow}>
         {Array.from({ length: totalSets }).map((_, i) => {
           const isDone = done.includes(i);
-          return (
-            <Press
-              key={i}
-              style={[styles.setBtn, isDone && styles.setBtnDone]}
-              onPress={() => toggleSet(i)}
-              scaleTo={0.9}
-            >
-              {isDone
-                ? <Feather name="check" size={18} color={C.bg} />
-                : <Text style={styles.setBtnText}>{i + 1}</Text>}
+          const content = isDone
+            ? <Feather name="check" size={18} color={C.bg} />
+            : <Text style={styles.setBtnText}>{i + 1}</Text>;
+          return readOnly ? (
+            <View key={i} style={[styles.setBtn, isDone && styles.setBtnDoneStatic]}>{content}</View>
+          ) : (
+            <Press key={i} style={[styles.setBtn, isDone && styles.setBtnDone]} onPress={() => toggleSet(i)} scaleTo={0.9}>
+              {content}
             </Press>
           );
         })}
@@ -237,20 +261,57 @@ function PhaseBlock({ icon, title, block }) {
   );
 }
 
+// Résumé d'une séance passée, calculé sur ce qui a réellement été fait.
+function HistorySummary({ exercises, performed }) {
+  if (!performed) {
+    return (
+      <View style={styles.legacyNote}>
+        <Feather name="info" size={14} color={C.textMuted} />
+        <Text style={styles.legacyText}>
+          Le détail des séries n'était pas encore enregistré pour cette séance : seul le programme prévu s'affiche.
+        </Text>
+      </View>
+    );
+  }
+  const plannedSets = exercises.reduce((a, ex) => a + setsOf(ex), 0);
+  const doneSets = performed.reduce((a, p) => a + (p?.setsDone || 0), 0);
+  const exercisesDone = exercises.filter((ex, i) => (performed[i]?.setsDone || 0) >= setsOf(ex)).length;
+  const volume = performedVolumeKg(exercises, performed);
+
+  return (
+    <View style={styles.summary}>
+      {[
+        [`${doneSets}/${plannedSets}`, "Séries"],
+        [`${exercisesDone}/${exercises.length}`, "Exercices"],
+        [volume > 0 ? `${formatKg(volume)} kg` : "—", "Volume"],
+      ].map(([value, label]) => (
+        <View key={label} style={styles.summaryTile}>
+          <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+          <Text style={styles.summaryLabel}>{label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ─── Écran ────────────────────────────────────────────────────────
 export default function WorkoutScreen({ navigation, route }) {
-  const { workout, sessionName, level, goal, split, duration, equipments, readOnly } = route?.params || {};
+  const { workout, session, sessionName, level, goal, split, duration, equipments, readOnly } = route?.params || {};
   const [showComplete, setShowComplete] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [elapsedMin, setElapsedMin] = useState(0);
   const [progress, setProgress] = useState({});
-  const [openIndex, setOpenIndex] = useState(0);
+  const [weights, setWeights] = useState({});
+  const [completed, setCompleted] = useState([]);
+  // En historique tout est replié : on parcourt le récapitulatif, puis on ouvre ce qu'on veut.
+  const [openIndex, setOpenIndex] = useState(readOnly ? -1 : 0);
   const startedAt = useRef(Date.now());
   const alreadySaved = useRef(false);
 
   if (!workout) return null;
 
   const exercises = workout.exercises || [];
+  const performedHistory = readOnly ? session?.performed : null;
   const totalSets = exercises.reduce((a, ex) => a + setsOf(ex), 0);
   const setsDone = Object.values(progress).reduce((a, n) => a + n, 0);
   const ratio = totalSets > 0 ? setsDone / totalSets : 0;
@@ -274,7 +335,10 @@ export default function WorkoutScreen({ navigation, route }) {
     if (alreadySaved.current) { setShowComplete(true); return; }
 
     const minutes = Math.max(1, Math.round((Date.now() - startedAt.current) / 60000));
+    // Ce qui a vraiment été fait, exercice par exercice, pour l'historique.
+    const performed = exercises.map((_, i) => ({ setsDone: progress[i] || 0, weight: weights[i] || null }));
     setElapsedMin(minutes);
+    setCompleted(performed);
     setShowComplete(true);
 
     if (readOnly) return;
@@ -282,13 +346,17 @@ export default function WorkoutScreen({ navigation, route }) {
     try {
       await saveSession({
         workout, sessionName, level, goal, split, duration, equipments,
-        elapsedMin: minutes, setsDone, totalSets,
+        elapsedMin: minutes, setsDone, totalSets, performed,
       });
     } catch {
       alreadySaved.current = false;
       setSaveFailed(true);
     }
   };
+
+  const headerMeta = readOnly && session
+    ? `${formatDate(session.date)} · ${sessionMinutes(session)} min · ${exercises.length} exercices`
+    : `${workout.totalDuration} min · ${exercises.length} exercices`;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -303,8 +371,7 @@ export default function WorkoutScreen({ navigation, route }) {
       >
         <SessionCompleteScreen
           workout={workout}
-          progress={progress}
-          startedAt={startedAt.current}
+          performed={completed}
           elapsedMin={elapsedMin}
           saveFailed={saveFailed}
           onGoHome={() => {
@@ -319,9 +386,7 @@ export default function WorkoutScreen({ navigation, route }) {
           <BackButton onPress={() => navigation.goBack()} />
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle} numberOfLines={1}>{workout.title?.toUpperCase()}</Text>
-            <Text style={styles.headerMeta}>
-              {workout.totalDuration} min · {exercises.length} exercices
-            </Text>
+            <Text style={styles.headerMeta}>{headerMeta}</Text>
           </View>
           {!readOnly && <ElapsedBadge startedAt={startedAt.current} />}
         </View>
@@ -340,6 +405,8 @@ export default function WorkoutScreen({ navigation, route }) {
         extraScrollHeight={120}
         enableAutomaticScroll
       >
+        {readOnly && <HistorySummary exercises={exercises} performed={performedHistory} />}
+
         {workout.warmup && <PhaseBlock icon="sunrise" title="ÉCHAUFFEMENT" block={workout.warmup} />}
 
         <View style={{ gap: 10 }}>
@@ -348,9 +415,12 @@ export default function WorkoutScreen({ navigation, route }) {
               key={i}
               ex={ex}
               index={i}
+              readOnly={readOnly}
+              performed={performedHistory?.[i]}
               expanded={i === openIndex}
-              onExpand={() => setOpenIndex(i)}
+              onToggle={() => setOpenIndex(i === openIndex ? -1 : i)}
               onSetsChange={handleSetsChange}
+              onWeightSaved={(idx, w) => setWeights((prev) => ({ ...prev, [idx]: w }))}
             />
           ))}
         </View>
@@ -392,6 +462,8 @@ const ws = StyleSheet.create({
     width: 46, height: 46, borderRadius: R.sm,
     backgroundColor: C.accent, alignItems: "center", justifyContent: "center",
   },
+  readOnlyRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  readOnlyValue: { fontFamily: "BebasNeue_400Regular", fontSize: 24, color: C.accent, letterSpacing: 0.5 },
 });
 
 // ─── Styles écran ─────────────────────────────────────────────────
@@ -409,6 +481,21 @@ const styles = StyleSheet.create({
     borderRadius: R.xs, paddingHorizontal: 8, paddingVertical: 4,
   },
   elapsedText: { fontFamily: "DMSans_700Bold", fontSize: 12, color: C.accent, letterSpacing: 0.5 },
+
+  summary: { flexDirection: "row", gap: 8, marginBottom: 4 },
+  summaryTile: {
+    flex: 1, paddingVertical: 12, paddingHorizontal: 12,
+    backgroundColor: C.surface, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border,
+  },
+  summaryValue: { fontFamily: "BebasNeue_400Regular", fontSize: 26, color: C.accent, lineHeight: 28 },
+  summaryLabel: { ...T.small, fontSize: 11, color: C.textMuted },
+  legacyNote: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: C.surface, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border, padding: 12, marginBottom: 4,
+  },
+  legacyText: { flex: 1, fontFamily: "DMSans_400Regular", fontSize: 12, color: C.textSecondary, lineHeight: 17 },
 
   phase: {
     backgroundColor: C.surface, borderRadius: R.lg,
@@ -464,6 +551,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border,
   },
   setBtnDone: { backgroundColor: C.accent, borderColor: C.accent, ...E.accentGlow },
+  setBtnDoneStatic: { backgroundColor: C.accent, borderColor: C.accent },
   setBtnText: { fontFamily: "BebasNeue_400Regular", fontSize: 20, color: C.textSecondary },
 
   musclesRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },

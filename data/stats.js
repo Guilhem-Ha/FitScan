@@ -73,3 +73,25 @@ export function personalRecord(weightHistory) {
     deltaKg: previous ? round1(toKg(latest) - toKg(previous)) : null,
   };
 }
+
+/* Reps renvoyées par Gemini : "10-12", "15", "30s". Seules les répétitions
+   comptent dans le volume (borne basse d'une fourchette), pas les efforts chronométrés. */
+export function repsCount(reps) {
+  const s = String(reps ?? "");
+  if (/\d\s*(s|sec|min)\b/i.test(s)) return 0;
+  const m = s.match(/\d+/);
+  return m ? parseInt(m[0], 10) : 0;
+}
+
+// « 3 240 » : séparateur de milliers posé à la main, sans dépendre d'Intl sous Hermes.
+export const formatKg = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+/* Volume réellement soulevé : charge notée × reps × séries cochées.
+   `performed[i]` suit l'ordre des exercices : { setsDone, weight: { weight, unit } | null }. */
+export function performedVolumeKg(exercises, performed) {
+  return (exercises || []).reduce((total, ex, i) => {
+    const entry = performed?.[i];
+    if (!entry?.weight) return total;
+    return total + toKg(entry.weight) * repsCount(ex.reps) * (entry.setsDone || 0);
+  }, 0);
+}

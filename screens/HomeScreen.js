@@ -169,7 +169,7 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <SessionCard
             item={item}
-            onPress={() => navigation.navigate("Workout", { workout: item.workout, readOnly: true })}
+            onPress={() => navigation.navigate("Workout", { workout: item.workout, session: item, readOnly: true })}
             onDelete={handleDelete}
           />
         )}
