@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, Modal, StatusBar, Linking, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { usePreventRemove } from "@react-navigation/native";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { saveSession, saveWeight, getLastWeight, sessionMinutes } from "../data/storage";
 import { performedVolumeKg, formatKg } from "../data/stats";
@@ -304,6 +305,8 @@ export default function WorkoutScreen({ navigation, route }) {
   const { workout, session, sessionName, level, goal, split, duration, equipments, readOnly } = route?.params || {};
   const [showComplete, setShowComplete] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [exitAllowed, setExitAllowed] = useState(false);
   const [elapsedMin, setElapsedMin] = useState(0);
   const [progress, setProgress] = useState({});
   const [weights, setWeights] = useState({});
@@ -312,34 +315,39 @@ export default function WorkoutScreen({ navigation, route }) {
   const [openIndex, setOpenIndex] = useState(readOnly ? -1 : 0);
   const startedAt = useRef(Date.now());
   const alreadySaved = useRef(false);
-  // Sortie voulue (confirmée, ou retour à l'accueil) : la garde ci-dessous la laisse passer.
-  const allowLeave = useRef(false);
+  const pendingExit = useRef(null);
 
-  /* Quitter une séance commencée (bouton retour, geste Android) perdait les séries
-     cochées sans prévenir. Les charges notées, elles, sont déjà dans le suivi. */
+  /* Quitter une séance non enregistrée (bouton retour, geste Android) la perdait
+     sans prévenir, même fraîchement générée : il fallait en regénérer une.
+     usePreventRemove est l'API de React Navigation 7 prévue pour native-stack ;
+     un simple écouteur beforeRemove n'y est pas entièrement pris en charge. */
+  const started = Object.values(progress).some((n) => n > 0);
+  usePreventRemove(!readOnly && !saved && !exitAllowed, ({ data }) => {
+    Alert.alert(
+      "Quitter la séance ?",
+      started
+        ? "Tes séries cochées ne seront pas enregistrées. Les charges déjà notées restent dans ton suivi."
+        : "Cette séance ne sera pas enregistrée : il faudra en générer une nouvelle.",
+      [
+        { text: "Rester", style: "cancel" },
+        // L'action d'origine a déjà été examinée pour cet écran : la rejouer ne redemande pas.
+        { text: "Quitter", style: "destructive", onPress: () => navigation.dispatch(data.action) },
+      ]
+    );
+  });
+
+  /* Sortie voulue (retour à l'accueil, quitter sans enregistrer) : on lève d'abord
+     le blocage, puis on navigue au rendu suivant, une fois le blocage retiré. */
+  const leave = (navigate) => {
+    pendingExit.current = navigate;
+    setExitAllowed(true);
+  };
   useEffect(() => {
-    if (readOnly) return undefined;
-    return navigation.addListener("beforeRemove", (e) => {
-      const started = Object.values(progress).some((n) => n > 0);
-      if (!started || alreadySaved.current || allowLeave.current) return;
-      e.preventDefault();
-      Alert.alert(
-        "Quitter la séance ?",
-        "Tes séries cochées ne seront pas enregistrées. Les charges déjà notées restent dans ton suivi.",
-        [
-          { text: "Rester", style: "cancel" },
-          {
-            text: "Quitter",
-            style: "destructive",
-            onPress: () => {
-              allowLeave.current = true;
-              navigation.dispatch(e.data.action);
-            },
-          },
-        ]
-      );
-    });
-  }, [navigation, progress, readOnly]);
+    if (!exitAllowed || !pendingExit.current) return;
+    const navigate = pendingExit.current;
+    pendingExit.current = null;
+    navigate();
+  }, [exitAllowed]);
 
   if (!workout) return null;
 
@@ -374,10 +382,7 @@ export default function WorkoutScreen({ navigation, route }) {
         {
           text: "Quitter sans enregistrer",
           style: "destructive",
-          onPress: () => {
-            allowLeave.current = true;
-            navigation.goBack();
-          },
+          onPress: () => leave(() => navigation.goBack()),
         },
       ]);
       return;
@@ -397,6 +402,7 @@ export default function WorkoutScreen({ navigation, route }) {
         workout, sessionName, level, goal, split, duration, equipments,
         elapsedMin: minutes, setsDone, totalSets, performed,
       });
+      setSaved(true);
     } catch {
       alreadySaved.current = false;
       setSaveFailed(true);
@@ -424,10 +430,9 @@ export default function WorkoutScreen({ navigation, route }) {
           elapsedMin={elapsedMin}
           saveFailed={saveFailed}
           onGoHome={() => {
-            // Même si l'enregistrement a échoué, l'utilisateur a choisi de partir.
-            allowLeave.current = true;
             setShowComplete(false);
-            navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+            // Même si l'enregistrement a échoué, l'utilisateur a choisi de partir.
+            leave(() => navigation.reset({ index: 0, routes: [{ name: "Main" }] }));
           }}
         />
       </Modal>
